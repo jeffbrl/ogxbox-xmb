@@ -110,10 +110,39 @@ def make_disc(w=64, h=64):
                     buf[idx:idx+4] = bytes([sheen, min(255, sheen + 10), min(255, sheen + 20), 230])
     return buf
 
+def make_info(w=64, h=64):
+    buf = bytearray(w * h * 4)
+    cx, cy = w / 2, h / 2
+    for y in range(h):
+        for x in range(w):
+            idx = (y * w + x) * 4
+            dx = x - cx
+            dy = y - cy
+            dist = math.sqrt(dx * dx + dy * dy)
+            # Outer ring
+            if dist < 22 and dist > 18:
+                buf[idx:idx+4] = bytes([255, 255, 255, 255])
+            elif dist <= 18:
+                # Dot of the 'i'
+                if abs(dx) <= 2.5 and (y >= cy - 12 and y <= cy - 7):
+                    buf[idx:idx+4] = bytes([255, 255, 255, 255])
+                # Stem of the 'i'
+                elif abs(dx) <= 2.5 and (y >= cy - 3 and y <= cy + 11):
+                    buf[idx:idx+4] = bytes([255, 255, 255, 255])
+                # Base bar of the 'i'
+                elif abs(dx) <= 5.5 and (y >= cy + 9 and y <= cy + 11):
+                    buf[idx:idx+4] = bytes([255, 255, 255, 255])
+                # Top serif of the 'i'
+                elif (dx >= -5.5 and dx <= 0) and (y >= cy - 3 and y <= cy - 1):
+                    buf[idx:idx+4] = bytes([255, 255, 255, 255])
+    return buf
+
 if __name__ == '__main__':
     os.makedirs('assets/icons', exist_ok=True)
     write_png('assets/icons/cat_games.png', 64, 64, make_gamepad())
     write_png('assets/icons/cat_settings.png', 64, 64, make_gear())
+    write_png('assets/icons/cat_info.png', 64, 64, make_info())
     write_png('assets/icons/cat_apps.png', 64, 64, make_grid())
     write_png('assets/icons/default_game.png', 64, 64, make_disc())
-    print("Generated 4 icons successfully.")
+    print("Generated icons successfully.")
+

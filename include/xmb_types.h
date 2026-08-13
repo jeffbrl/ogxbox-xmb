@@ -4,8 +4,9 @@
 typedef enum {
     CATEGORY_GAMES = 0,
     CATEGORY_APPS,
-    CATEGORY_SETTINGS,
-    CATEGORY_COUNT
+    CATEGORY_INFO,
+    CATEGORY_COUNT,
+    CATEGORY_SETTINGS = CATEGORY_INFO
 } XMBCategory;
 
 typedef enum {

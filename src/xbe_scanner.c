@@ -135,10 +135,10 @@ int xbe_scanner_get_items(XMBCategory category, XMBItem* items, int max_items) {
     } else if (category == CATEGORY_APPS) {
         strncpy(items[count].title, "File Manager", sizeof(items[count].title));
         count++;
-    } else if (category == CATEGORY_SETTINGS) {
-        strncpy(items[count].title, "Network Settings", sizeof(items[count].title));
+    } else if (category == CATEGORY_INFO) {
+        strncpy(items[count].title, "Network Info", sizeof(items[count].title));
         count++;
-        strncpy(items[count].title, "Video Settings", sizeof(items[count].title));
+        strncpy(items[count].title, "System Info", sizeof(items[count].title));
         count++;
     }
 

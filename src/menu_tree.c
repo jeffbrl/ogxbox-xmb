@@ -142,8 +142,8 @@ void menu_tree_init(XMBNode* root_categories, int max_games) {
     settings_root_children[4].children = settings_network_children;
     settings_root_children[4].child_count = 3;
 
-    root_categories[CATEGORY_SETTINGS].children = settings_root_children;
-    root_categories[CATEGORY_SETTINGS].child_count = 5;
+    root_categories[CATEGORY_INFO].children = settings_root_children;
+    root_categories[CATEGORY_INFO].child_count = 5;
 
     // ==========================================
     // 2. APPS CATEGORY TREE

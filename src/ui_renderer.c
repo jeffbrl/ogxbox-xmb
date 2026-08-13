@@ -20,7 +20,7 @@ static TTF_Font* font_small = NULL;
 // Textures for Categories & Items
 static SDL_Texture* tex_cat_games = NULL;
 static SDL_Texture* tex_cat_apps = NULL;
-static SDL_Texture* tex_cat_settings = NULL;
+static SDL_Texture* tex_cat_info = NULL;
 static SDL_Texture* tex_default_game = NULL;
 
 // PS3 Wave Particle System
@@ -203,7 +203,10 @@ int ui_init(void) {
     // Load Category and Default Icons
     tex_cat_games = load_texture("cat_games.png");
     tex_cat_apps = load_texture("cat_apps.png");
-    tex_cat_settings = load_texture("cat_settings.png");
+    tex_cat_info = load_texture("cat_info.png");
+    if (!tex_cat_info) {
+        tex_cat_info = load_texture("cat_settings.png");
+    }
     tex_default_game = load_texture("default_game.png");
 
     init_particles();
@@ -214,7 +217,7 @@ int ui_init(void) {
 void ui_cleanup(void) {
     if (tex_cat_games) SDL_DestroyTexture(tex_cat_games);
     if (tex_cat_apps) SDL_DestroyTexture(tex_cat_apps);
-    if (tex_cat_settings) SDL_DestroyTexture(tex_cat_settings);
+    if (tex_cat_info) SDL_DestroyTexture(tex_cat_info);
     if (tex_default_game) SDL_DestroyTexture(tex_default_game);
 
     if (font_main) TTF_CloseFont(font_main);
@@ -436,8 +439,8 @@ void ui_render(XMBCategory current_category, XMBNode* items, int item_count, int
     SDL_Color dim_text = { 140, 160, 180, 255 };
     SDL_Color glow_blue = { 100, 200, 255, 255 };
 
-    const char* cat_names[] = { "Games", "Apps", "Settings" };
-    SDL_Texture* cat_textures[] = { tex_cat_games, tex_cat_apps, tex_cat_settings };
+    const char* cat_names[] = { "Games", "Apps", "Info" };
+    SDL_Texture* cat_textures[] = { tex_cat_games, tex_cat_apps, tex_cat_info };
 
     // 5. Render Horizontal Category Row (dimmed if inside a deep sub-menu)
     float cat_dim_mult = (nav_depth > 0) ? 0.45f : 1.0f;
@@ -505,7 +508,7 @@ void ui_render(XMBCategory current_category, XMBNode* items, int item_count, int
                     if (items[i].type == NODE_TYPE_SUBMENU) {
                         item_tex = tex_cat_apps;
                     } else if (items[i].type == NODE_TYPE_INFO) {
-                        item_tex = tex_cat_settings;
+                        item_tex = tex_cat_info;
                     } else {
                         item_tex = tex_default_game;
                     }
