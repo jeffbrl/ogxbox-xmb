@@ -87,6 +87,65 @@ static SDL_Texture* load_texture(const char* filename) {
     return NULL;
 }
 
+#define MAX_CUSTOM_ICONS 32
+typedef struct {
+    char path[256];
+    SDL_Texture* texture;
+} CustomIconCache;
+
+static CustomIconCache icon_cache[MAX_CUSTOM_ICONS];
+static int icon_cache_count = 0;
+
+static SDL_Texture* get_custom_icon(const char* file_path) {
+    if (!file_path || file_path[0] == '\0') return NULL;
+    
+    for (int i = 0; i < icon_cache_count; i++) {
+        if (strcmp(icon_cache[i].path, file_path) == 0) {
+            return icon_cache[i].texture;
+        }
+    }
+    
+    FILE* f = fopen(file_path, "rb");
+    if (!f) return NULL;
+    
+    fseek(f, 0, SEEK_END);
+    long size = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    
+    unsigned char* buf = (unsigned char*)malloc(size);
+    if (!buf) {
+        fclose(f);
+        return NULL;
+    }
+    
+    fread(buf, 1, size, f);
+    fclose(f);
+    
+    int w, h, channels;
+    unsigned char* data = stbi_load_from_memory(buf, (int)size, &w, &h, &channels, 4);
+    free(buf);
+    
+    if (data) {
+        SDL_Surface* surface = SDL_CreateRGBSurfaceWithFormatFrom(
+            data, w, h, 32, w * 4, SDL_PIXELFORMAT_RGBA32);
+        if (surface) {
+            SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer, surface);
+            SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_BLEND);
+            SDL_FreeSurface(surface);
+            stbi_image_free(data);
+            
+            if (tex && icon_cache_count < MAX_CUSTOM_ICONS) {
+                strncpy(icon_cache[icon_cache_count].path, file_path, 256);
+                icon_cache[icon_cache_count].texture = tex;
+                icon_cache_count++;
+            }
+            return tex;
+        }
+        stbi_image_free(data);
+    }
+    return NULL;
+}
+
 static void init_particles(void) {
     for (int i = 0; i < NUM_PARTICLES; i++) {
         particles[i].x = (float)(rand() % WINDOW_WIDTH);
@@ -388,12 +447,20 @@ void ui_render(XMBCategory current_category, XMBNode* items, int item_count, int
                     SDL_RenderDrawRect(renderer, &glow2);
                 }
 
-                // Choose icon based on category/node type
-                SDL_Texture* item_tex = tex_default_game;
-                if (items[i].type == NODE_TYPE_SUBMENU) {
-                    item_tex = tex_cat_apps;
-                } else if (items[i].type == NODE_TYPE_INFO) {
-                    item_tex = tex_cat_settings;
+                // Choose icon based on custom artwork, category, or node type
+                SDL_Texture* item_tex = NULL;
+                if (items[i].icon_path[0] != '\0') {
+                    item_tex = get_custom_icon(items[i].icon_path);
+                }
+
+                if (!item_tex) {
+                    if (items[i].type == NODE_TYPE_SUBMENU) {
+                        item_tex = tex_cat_apps;
+                    } else if (items[i].type == NODE_TYPE_INFO) {
+                        item_tex = tex_cat_settings;
+                    } else {
+                        item_tex = tex_default_game;
+                    }
                 }
 
                 if (item_tex) {

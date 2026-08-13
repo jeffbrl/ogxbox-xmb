@@ -169,6 +169,7 @@ void menu_tree_init(XMBNode* root_categories, int max_games) {
     for (int i = 0; i < game_count; i++) {
         strncpy(games_root_children[i].title, scanned_games[i].title, 64);
         strncpy(games_root_children[i].path, scanned_games[i].path, 256);
+        strncpy(games_root_children[i].icon_path, scanned_games[i].icon_path, 256);
         strncpy(games_root_children[i].subtitle, "Original Xbox Title", 64);
         games_root_children[i].type = NODE_TYPE_LAUNCH;
     }

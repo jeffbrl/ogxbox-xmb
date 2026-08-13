@@ -110,6 +110,21 @@ int xbe_scanner_get_items(XMBCategory category, XMBItem* items, int max_items) {
                             fclose(f);
                             strncpy(items[count].path, xbe_path, sizeof(items[count].path));
                             get_xbe_title(xbe_path, items[count].title, sizeof(items[count].title));
+                            
+                            // Check for custom artwork/icon
+                            items[count].icon_path[0] = '\0';
+                            const char* art_names[] = { "icon.png", "boxart.png", "poster.png", "cover.png", "default.png" };
+                            for (int a = 0; a < 5; a++) {
+                                char art_path[256];
+                                snprintf(art_path, sizeof(art_path), "%s\\%s\\%s", scan_paths[p], fd.cFileName, art_names[a]);
+                                FILE* af = fopen(art_path, "rb");
+                                if (af) {
+                                    fclose(af);
+                                    strncpy(items[count].icon_path, art_path, sizeof(items[count].icon_path));
+                                    break;
+                                }
+                            }
+                            
                             count++;
                         }
                     }
