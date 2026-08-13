@@ -1,0 +1,189 @@
+#include "menu_tree.h"
+#include "xbe_scanner.h"
+#include <string.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <hal/xbox.h>
+
+// Static storage for hierarchical nodes
+static XMBNode settings_sysinfo_children[5];
+static XMBNode settings_video_children[4];
+static XMBNode settings_audio_children[3];
+static XMBNode settings_network_children[3];
+static XMBNode settings_root_children[4];
+
+static XMBNode apps_utils_children[3];
+static XMBNode apps_storage_children[3];
+static XMBNode apps_root_children[2];
+
+static XMBNode games_root_children[64];
+
+void menu_tree_init(XMBNode* root_categories, int max_games) {
+    (void)max_games;
+
+    // ==========================================
+    // 1. SETTINGS CATEGORY TREE
+    // ==========================================
+    
+    // System Information
+    strncpy(settings_sysinfo_children[0].title, "Console Hardware", 64);
+    strncpy(settings_sysinfo_children[0].subtitle, "Original Xbox (x86 Coppermine 733MHz)", 64);
+    settings_sysinfo_children[0].type = NODE_TYPE_INFO;
+
+    strncpy(settings_sysinfo_children[1].title, "System Memory", 64);
+    strncpy(settings_sysinfo_children[1].subtitle, "64 MB Unified DDR RAM", 64);
+    settings_sysinfo_children[1].type = NODE_TYPE_INFO;
+
+    strncpy(settings_sysinfo_children[2].title, "BIOS / Kernel", 64);
+    strncpy(settings_sysinfo_children[2].subtitle, "Complex v1.03 (512K TSOP)", 64);
+    settings_sysinfo_children[2].type = NODE_TYPE_INFO;
+
+    strncpy(settings_sysinfo_children[3].title, "Video Encoder", 64);
+    strncpy(settings_sysinfo_children[3].subtitle, "Conexant CX25871 HDTV", 64);
+    settings_sysinfo_children[3].type = NODE_TYPE_INFO;
+
+    strncpy(settings_sysinfo_children[4].title, "Dashboard Version", 64);
+    strncpy(settings_sysinfo_children[4].subtitle, "OGX-XMB v1.0 (Sony PS3 Style)", 64);
+    settings_sysinfo_children[4].type = NODE_TYPE_INFO;
+
+    // Display Settings
+    strncpy(settings_video_children[0].title, "720p HD Output", 64);
+    strncpy(settings_video_children[0].subtitle, "Enabled (1280x720 60Hz)", 64);
+    settings_video_children[0].type = NODE_TYPE_ACTION;
+
+    strncpy(settings_video_children[1].title, "480p Progressive", 64);
+    strncpy(settings_video_children[1].subtitle, "Enabled", 64);
+    settings_video_children[1].type = NODE_TYPE_ACTION;
+
+    strncpy(settings_video_children[2].title, "1080i High-Def", 64);
+    strncpy(settings_video_children[2].subtitle, "Disabled", 64);
+    settings_video_children[2].type = NODE_TYPE_ACTION;
+
+    strncpy(settings_video_children[3].title, "Widescreen Format", 64);
+    strncpy(settings_video_children[3].subtitle, "16:9 Aspect Ratio", 64);
+    settings_video_children[3].type = NODE_TYPE_ACTION;
+
+    // Audio Settings
+    strncpy(settings_audio_children[0].title, "Digital Output", 64);
+    strncpy(settings_audio_children[0].subtitle, "Dolby Digital 5.1 (Optical)", 64);
+    settings_audio_children[0].type = NODE_TYPE_ACTION;
+
+    strncpy(settings_audio_children[1].title, "DTS Surround", 64);
+    strncpy(settings_audio_children[1].subtitle, "Enabled", 64);
+    settings_audio_children[1].type = NODE_TYPE_ACTION;
+
+    strncpy(settings_audio_children[2].title, "UI Navigation Sounds", 64);
+    strncpy(settings_audio_children[2].subtitle, "Enabled (100% Volume)", 64);
+    settings_audio_children[2].type = NODE_TYPE_ACTION;
+
+    // Network Settings
+    strncpy(settings_network_children[0].title, "Network Protocol", 64);
+    strncpy(settings_network_children[0].subtitle, "DHCP (Automatic)", 64);
+    settings_network_children[0].type = NODE_TYPE_INFO;
+
+    strncpy(settings_network_children[1].title, "IP Address", 64);
+    strncpy(settings_network_children[1].subtitle, "192.168.0.100", 64);
+    settings_network_children[1].type = NODE_TYPE_INFO;
+
+    strncpy(settings_network_children[2].title, "Gateway / Subnet", 64);
+    strncpy(settings_network_children[2].subtitle, "192.168.0.1 / 255.255.255.0", 64);
+    settings_network_children[2].type = NODE_TYPE_INFO;
+
+    // Settings Root Menu
+    strncpy(settings_root_children[0].title, "System Information", 64);
+    strncpy(settings_root_children[0].subtitle, "Kernel, Memory, Hardware specs", 64);
+    settings_root_children[0].type = NODE_TYPE_SUBMENU;
+    settings_root_children[0].children = settings_sysinfo_children;
+    settings_root_children[0].child_count = 5;
+
+    strncpy(settings_root_children[1].title, "Display Settings", 64);
+    strncpy(settings_root_children[1].subtitle, "Resolution, Widescreen 16:9", 64);
+    settings_root_children[1].type = NODE_TYPE_SUBMENU;
+    settings_root_children[1].children = settings_video_children;
+    settings_root_children[1].child_count = 4;
+
+    strncpy(settings_root_children[2].title, "Audio Settings", 64);
+    strncpy(settings_root_children[2].subtitle, "Dolby Digital 5.1 & UI sounds", 64);
+    settings_root_children[2].type = NODE_TYPE_SUBMENU;
+    settings_root_children[2].children = settings_audio_children;
+    settings_root_children[2].child_count = 3;
+
+    strncpy(settings_root_children[3].title, "Network Settings", 64);
+    strncpy(settings_root_children[3].subtitle, "Ethernet, IP address, Gateway", 64);
+    settings_root_children[3].type = NODE_TYPE_SUBMENU;
+    settings_root_children[3].children = settings_network_children;
+    settings_root_children[3].child_count = 3;
+
+    root_categories[CATEGORY_SETTINGS].children = settings_root_children;
+    root_categories[CATEGORY_SETTINGS].child_count = 4;
+
+    // ==========================================
+    // 2. APPS CATEGORY TREE
+    // ==========================================
+    strncpy(apps_utils_children[0].title, "Reboot Console", 64);
+    strncpy(apps_utils_children[0].subtitle, "Soft-reset Xbox system", 64);
+    apps_utils_children[0].type = NODE_TYPE_ACTION;
+
+    strncpy(apps_utils_children[1].title, "Power Off", 64);
+    strncpy(apps_utils_children[1].subtitle, "Shutdown hardware", 64);
+    apps_utils_children[1].type = NODE_TYPE_ACTION;
+
+    strncpy(apps_utils_children[2].title, "Launch MS Dashboard", 64);
+    strncpy(apps_utils_children[2].subtitle, "C:\\xboxdash.xbe", 64);
+    strncpy(apps_utils_children[2].path, "C:\\xboxdash.xbe", 256);
+    apps_utils_children[2].type = NODE_TYPE_LAUNCH;
+
+    strncpy(apps_storage_children[0].title, "Drive C: (System)", 64);
+    strncpy(apps_storage_children[0].subtitle, "490 MB Total / 280 MB Free", 64);
+    apps_storage_children[0].type = NODE_TYPE_INFO;
+
+    strncpy(apps_storage_children[1].title, "Drive E: (Games / Data)", 64);
+    strncpy(apps_storage_children[1].subtitle, "4890 MB Total / 2150 MB Free", 64);
+    apps_storage_children[1].type = NODE_TYPE_INFO;
+
+    strncpy(apps_storage_children[2].title, "Drive F: (Extended)", 64);
+    strncpy(apps_storage_children[2].subtitle, "Not mounted", 64);
+    apps_storage_children[2].type = NODE_TYPE_INFO;
+
+    // Apps Root Menu
+    strncpy(apps_root_children[0].title, "System Utilities", 64);
+    strncpy(apps_root_children[0].subtitle, "Reboot, Power, Stock Dash", 64);
+    apps_root_children[0].type = NODE_TYPE_SUBMENU;
+    apps_root_children[0].children = apps_utils_children;
+    apps_root_children[0].child_count = 3;
+
+    strncpy(apps_root_children[1].title, "Hard Drive Partitions", 64);
+    strncpy(apps_root_children[1].subtitle, "Drive capacity and free space", 64);
+    apps_root_children[1].type = NODE_TYPE_SUBMENU;
+    apps_root_children[1].children = apps_storage_children;
+    apps_root_children[1].child_count = 3;
+
+    root_categories[CATEGORY_APPS].children = apps_root_children;
+    root_categories[CATEGORY_APPS].child_count = 2;
+
+    // ==========================================
+    // 3. GAMES CATEGORY TREE
+    // ==========================================
+    static XMBItem scanned_games[64];
+    int game_count = xbe_scanner_get_items(CATEGORY_GAMES, scanned_games, 64);
+    for (int i = 0; i < game_count; i++) {
+        strncpy(games_root_children[i].title, scanned_games[i].title, 64);
+        strncpy(games_root_children[i].path, scanned_games[i].path, 256);
+        strncpy(games_root_children[i].subtitle, "Original Xbox Title", 64);
+        games_root_children[i].type = NODE_TYPE_LAUNCH;
+    }
+
+    root_categories[CATEGORY_GAMES].children = games_root_children;
+    root_categories[CATEGORY_GAMES].child_count = game_count;
+}
+
+XMBNode* menu_tree_get_active_list(XMBNavContext* ctx, XMBCategory cat, XMBNode* root_categories, int* out_count) {
+    if (!ctx || ctx->depth == 0) {
+        *out_count = root_categories[cat].child_count;
+        return root_categories[cat].children;
+    }
+
+    XMBNode* current = ctx->stack[ctx->depth - 1];
+    *out_count = current->child_count;
+    return current->children;
+}

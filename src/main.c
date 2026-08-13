@@ -1,18 +1,17 @@
 #include <hal/debug.h>
 #include <hal/video.h>
 #include <windows.h>
-#include <SDL.h>
 #include <nxdk/mount.h>
+#include <hal/xbox.h>
+#include <SDL.h>
 
 #include "xmb_config.h"
 #include "xmb_types.h"
+#include "menu_tree.h"
 #include "ui_renderer.h"
 #include "input.h"
 #include "audio.h"
-#include "xbe_scanner.h"
 #include "xbe_launcher.h"
-
-#define MAX_ITEMS_PER_CAT 50
 
 int main(void) {
     XVideoSetMode(WINDOW_WIDTH, WINDOW_HEIGHT, 32, REFRESH_DEFAULT);
@@ -36,15 +35,14 @@ int main(void) {
     audio_init();
     input_init();
 
-    static XMBItem items[CATEGORY_COUNT][MAX_ITEMS_PER_CAT];
-    int counts[CATEGORY_COUNT] = {0};
-    
-    for (int i = 0; i < CATEGORY_COUNT; i++) {
-        counts[i] = xbe_scanner_get_items(i, items[i], MAX_ITEMS_PER_CAT);
-    }
+    // Initialize Root Menu Tree and Scanned Game Nodes
+    static XMBNode root_categories[CATEGORY_COUNT];
+    menu_tree_init(root_categories, 64);
 
     XMBCategory current_category = CATEGORY_GAMES;
-    int selected_index[CATEGORY_COUNT] = {0};
+    XMBNavContext nav_ctx = { .depth = 0 };
+    int selected_indices[MAX_NAV_DEPTH + 1] = {0};
+
     int running = 1;
     InputState state;
     
@@ -55,49 +53,79 @@ int main(void) {
             running = 0;
         }
         
-        if (state.left) {
-            if (current_category > 0) {
-                current_category--;
-                audio_play_sfx(SFX_CATEGORY);
+        // Category switching only allowed at root navigation level
+        if (nav_ctx.depth == 0) {
+            if (state.left) {
+                if (current_category > 0) {
+                    current_category--;
+                    audio_play_sfx(SFX_CATEGORY);
+                }
             }
-        }
-        if (state.right) {
-            if (current_category < CATEGORY_COUNT - 1) {
-                current_category++;
-                audio_play_sfx(SFX_CATEGORY);
+            if (state.right) {
+                if (current_category < CATEGORY_COUNT - 1) {
+                    current_category++;
+                    audio_play_sfx(SFX_CATEGORY);
+                }
             }
         }
         
-        int count = counts[current_category];
+        int item_count = 0;
+        XMBNode* active_items = menu_tree_get_active_list(&nav_ctx, current_category, root_categories, &item_count);
+        int cur_sel = selected_indices[nav_ctx.depth];
+
         if (state.up) {
-            if (selected_index[current_category] > 0) {
-                selected_index[current_category]++;
-                selected_index[current_category]--; // clamp logic
-                selected_index[current_category]--;
+            if (cur_sel > 0) {
+                selected_indices[nav_ctx.depth]--;
                 audio_play_sfx(SFX_TICK);
             }
         }
         if (state.down) {
-            if (selected_index[current_category] < count - 1) {
-                selected_index[current_category]++;
+            if (cur_sel < item_count - 1) {
+                selected_indices[nav_ctx.depth]++;
                 audio_play_sfx(SFX_TICK);
             }
         }
+        
+        cur_sel = selected_indices[nav_ctx.depth];
+
         if (state.a) {
-            if (count > 0) {
-                audio_play_sfx(SFX_SELECT);
-                if (current_category == CATEGORY_GAMES) {
-                    SDL_Delay(80); // Brief audio cue grace period before hardware handoff
-                    xbe_launcher_launch(items[current_category][selected_index[current_category]].path);
+            if (item_count > 0 && active_items != NULL) {
+                XMBNode* selected_node = &active_items[cur_sel];
+                
+                if (selected_node->type == NODE_TYPE_SUBMENU && selected_node->children != NULL && nav_ctx.depth < MAX_NAV_DEPTH) {
+                    audio_play_sfx(SFX_SELECT);
+                    nav_ctx.stack[nav_ctx.depth] = selected_node;
+                    nav_ctx.depth++;
+                    selected_indices[nav_ctx.depth] = 0; // reset sub-level cursor
+                } else if (selected_node->type == NODE_TYPE_LAUNCH && selected_node->path[0] != '\0') {
+                    audio_play_sfx(SFX_SELECT);
+                    SDL_Delay(90);
+                    xbe_launcher_launch(selected_node->path);
                     running = 0;
+                } else if (selected_node->type == NODE_TYPE_ACTION) {
+                    audio_play_sfx(SFX_SELECT);
+                    if (strcmp(selected_node->title, "Reboot Console") == 0) {
+                        HalReturnToFirmware(HalRebootRoutine);
+                    } else if (strcmp(selected_node->title, "Power Off") == 0) {
+                        HalReturnToFirmware(HalHaltRoutine);
+                    }
+                } else {
+                    audio_play_sfx(SFX_SELECT);
                 }
             }
         }
+        
         if (state.b) {
-            audio_play_sfx(SFX_BACK);
+            if (nav_ctx.depth > 0) {
+                audio_play_sfx(SFX_BACK);
+                nav_ctx.depth--;
+            } else {
+                audio_play_sfx(SFX_BACK);
+            }
         }
         
-        ui_render(current_category, items[current_category], count, selected_index[current_category]);
+        const char* breadcrumb = (nav_ctx.depth > 0) ? nav_ctx.stack[nav_ctx.depth - 1]->title : NULL;
+        ui_render(current_category, active_items, item_count, selected_indices[nav_ctx.depth], nav_ctx.depth, breadcrumb);
         
         SDL_Delay(16); // ~60fps
     }

@@ -286,7 +286,7 @@ static void render_hud(void) {
     render_text_shadow(font_small, "Xbox XMB", 45, 24, hud_color, 160);
 }
 
-void ui_render(XMBCategory current_category, XMBItem* items, int item_count, int selected_index) {
+void ui_render(XMBCategory current_category, XMBNode* items, int item_count, int selected_index, int nav_depth, const char* breadcrumb) {
     // 1. Initialize Animation state on first run
     float target_cat_x = (float)current_category;
     float target_item_y = (float)selected_index;
@@ -310,68 +310,74 @@ void ui_render(XMBCategory current_category, XMBItem* items, int item_count, int
     // 3. Render Top HUD
     render_hud();
 
+    // Breadcrumb path for nested submenus
+    if (nav_depth > 0 && breadcrumb && breadcrumb[0] != '\0') {
+        char bc_text[128];
+        snprintf(bc_text, sizeof(bc_text), "< %s", breadcrumb);
+        SDL_Color bc_col = { 130, 200, 255, 255 };
+        render_text_shadow(font_small, bc_text, 50, 68, bc_col, 200);
+    }
+
     // 4. Coordinate Constants
     const int origin_x = 210;
     const int origin_y = 240;
     const int cat_spacing = 130;
-    const int item_spacing = 58;
+    const int item_spacing = 62;
 
     SDL_Color white = { 255, 255, 255, 255 };
-    SDL_Color silver = { 200, 215, 230, 255 };
+    SDL_Color silver = { 190, 210, 230, 255 };
+    SDL_Color dim_text = { 140, 160, 180, 255 };
     SDL_Color glow_blue = { 100, 200, 255, 255 };
 
     const char* cat_names[] = { "Games", "Apps", "Settings" };
     SDL_Texture* cat_textures[] = { tex_cat_games, tex_cat_apps, tex_cat_settings };
 
-    // 5. Render Horizontal Category Row
+    // 5. Render Horizontal Category Row (dimmed if inside a deep sub-menu)
+    float cat_dim_mult = (nav_depth > 0) ? 0.45f : 1.0f;
+
     for (int c = 0; c < CATEGORY_COUNT; c++) {
         float rel_c = (float)c - anim_cat_x;
         float x = (float)origin_x + rel_c * cat_spacing;
         
-        // Active category smoothly lifts up to Y=155
         float lift = (1.0f - fminf(1.0f, fabsf(rel_c))) * (anim_cat_elev * 85.0f);
         float y = (float)origin_y - lift;
 
         float dist = fabsf(rel_c);
         float alpha_factor = fmaxf(0.0f, 1.0f - dist * 0.60f);
-        Uint8 alpha = (Uint8)(90 + alpha_factor * 165); // 90 to 255
+        Uint8 alpha = (Uint8)((90 + alpha_factor * 165) * cat_dim_mult);
 
-        int icon_size = (int)(38.0f + alpha_factor * 12.0f); // 38px to 50px
+        int icon_size = (int)(38.0f + alpha_factor * 12.0f);
         SDL_Rect dest = { (int)(x - icon_size / 2), (int)(y - icon_size / 2), icon_size, icon_size };
 
-        // Draw Category Icon
         if (cat_textures[c]) {
             SDL_SetTextureAlphaMod(cat_textures[c], alpha);
             SDL_RenderCopy(renderer, cat_textures[c], NULL, &dest);
         } else {
-            // Crisp Vector Fallback
             SDL_SetRenderDrawColor(renderer, 220, 235, 255, alpha);
             SDL_RenderFillRect(renderer, &dest);
         }
 
-        // Draw Category Title underneath
-        if (dist < 0.8f) {
+        if (dist < 0.8f && nav_depth == 0) {
             Uint8 text_alpha = (Uint8)((1.0f - dist / 0.8f) * 255);
             render_text_shadow(font_small, cat_names[c], (int)(x - 22), (int)(y + icon_size / 2 + 6), white, text_alpha);
         }
     }
 
-    // 6. Render Vertical Items Column for Active Category
-    if (item_count > 0) {
+    // 6. Render Vertical Items Column for Active Node List
+    if (item_count > 0 && items != NULL) {
         for (int i = 0; i < item_count; i++) {
             float rel_i = (float)i - anim_item_y;
             float y = (float)origin_y + rel_i * item_spacing;
 
-            // Only render visible items
             if (y > 70 && y < WINDOW_HEIGHT + 40) {
                 float dist = fabsf(rel_i);
                 float focus = fmaxf(0.0f, 1.0f - dist * 0.55f);
-                Uint8 alpha = (Uint8)(70 + focus * 185); // 70 to 255
+                Uint8 alpha = (Uint8)(70 + focus * 185);
 
-                int icon_size = (int)(32.0f + focus * 12.0f); // 32px to 44px
+                int icon_size = (int)(30.0f + focus * 12.0f);
                 SDL_Rect dest = { origin_x - icon_size / 2, (int)(y - icon_size / 2), icon_size, icon_size };
 
-                // Focus Glow / Reticle Ring on Selected Item
+                // Glow Ring on Selected Item
                 if (dist < 0.4f) {
                     float glow_strength = 1.0f - (dist / 0.4f);
                     SDL_Rect glow1 = { dest.x - 4, dest.y - 4, dest.w + 8, dest.h + 8 };
@@ -382,18 +388,29 @@ void ui_render(XMBCategory current_category, XMBItem* items, int item_count, int
                     SDL_RenderDrawRect(renderer, &glow2);
                 }
 
-                // Draw Item Icon
-                if (tex_default_game) {
-                    SDL_SetTextureAlphaMod(tex_default_game, alpha);
-                    SDL_RenderCopy(renderer, tex_default_game, NULL, &dest);
+                // Choose icon based on category/node type
+                SDL_Texture* item_tex = tex_default_game;
+                if (items[i].type == NODE_TYPE_SUBMENU) {
+                    item_tex = tex_cat_apps;
+                } else if (items[i].type == NODE_TYPE_INFO) {
+                    item_tex = tex_cat_settings;
+                }
+
+                if (item_tex) {
+                    SDL_SetTextureAlphaMod(item_tex, alpha);
+                    SDL_RenderCopy(renderer, item_tex, NULL, &dest);
                 } else {
                     SDL_SetRenderDrawColor(renderer, 180, 200, 225, alpha);
                     SDL_RenderFillRect(renderer, &dest);
                 }
 
-                // Draw Item Title
-                SDL_Color text_col = (dist < 0.4f) ? white : silver;
-                render_text_shadow(font_main, items[i].title, origin_x + 38, (int)(y - 12), text_col, alpha);
+                // Title & Subtitle
+                SDL_Color title_col = (dist < 0.4f) ? white : silver;
+                render_text_shadow(font_main, items[i].title, origin_x + 36, (int)(y - 14), title_col, alpha);
+
+                if (items[i].subtitle[0] != '\0') {
+                    render_text_shadow(font_small, items[i].subtitle, origin_x + 38, (int)(y + 10), dim_text, (Uint8)(alpha * 0.85f));
+                }
             }
         }
     } else {
