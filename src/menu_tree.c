@@ -8,99 +8,57 @@
 #include <hal/video.h>
 #include <xboxkrnl/xboxkrnl.h>
 
-// Static storage for hierarchical nodes
+// Static storage for Info submenus
+static XMBNode info_hardware_children[5];
+static XMBNode info_storage_children[4];
+static XMBNode info_root_children[3];
+
+// Static storage for Settings submenus
 static XMBNode settings_theme_children[5];
-static XMBNode settings_sysinfo_children[5];
 static XMBNode settings_video_children[5];
 static XMBNode settings_audio_children[3];
-static XMBNode settings_network_children[3];
-static XMBNode settings_root_children[5];
+static XMBNode settings_network_children[2];
+static XMBNode settings_root_children[4];
 
+// Static storage for Apps submenus
 static XMBNode apps_utils_children[3];
-static XMBNode apps_storage_children[4];
-static XMBNode apps_root_children[2];
+static XMBNode apps_root_children[1];
 
+// Static storage for Games
 static XMBNode games_root_children[64];
 
-static int detect_physical_ram_mb(void) {
-    // Probe physical uncached direct map at 64MB offset (0xA4000000)
-    // Xbox memory direct map is: Cached = 0x80000000 + phys, Uncached = 0xA0000000 + phys
-    volatile uint32_t* ptr_low  = (volatile uint32_t*)0xA0200000;
-    volatile uint32_t* ptr_high = (volatile uint32_t*)0xA4200000;
-
-    uint32_t orig_low = *ptr_low;
-    uint32_t orig_high = *ptr_high;
-
-    *ptr_low = 0xAA55AA55;
-    *ptr_high = 0x55AA55AA;
-
-    int is_128mb = 0;
-    if (*ptr_low == 0xAA55AA55 && *ptr_high == 0x55AA55AA) {
-        *ptr_high = 0x12345678;
-        if (*ptr_low == 0xAA55AA55 && *ptr_high == 0x12345678) {
-            is_128mb = 1;
-        }
-    }
-
-    *ptr_low = orig_low;
-    *ptr_high = orig_high;
-
-    return is_128mb ? 128 : 64;
-}
-
 void menu_tree_refresh_system_info(void) {
-    // 1. Dynamic System Memory Detection
-    int phys_ram_mb = detect_physical_ram_mb();
-
+    // 1. Safe Dynamic System Memory Query via Kernel MM API
     MM_STATISTICS mm_stats;
     memset(&mm_stats, 0, sizeof(mm_stats));
     mm_stats.Length = sizeof(MM_STATISTICS);
     
-    unsigned long free_mb = 0;
     if (NT_SUCCESS(MmQueryStatistics(&mm_stats))) {
-        unsigned long kernel_total_mb = (mm_stats.TotalPhysicalPages * 4) / 1024;
-        free_mb = (mm_stats.AvailablePages * 4) / 1024;
-        if (phys_ram_mb == 128 && kernel_total_mb < 128) {
-            free_mb += (128 - kernel_total_mb);
-        }
+        unsigned long total_mb = (mm_stats.TotalPhysicalPages * 4) / 1024;
+        unsigned long free_mb = (mm_stats.AvailablePages * 4) / 1024;
+        snprintf(info_hardware_children[1].subtitle, 64, "%lu MB Total (%lu MB Free)", total_mb, free_mb);
     } else {
-        free_mb = (phys_ram_mb == 128) ? 112 : 48;
+        snprintf(info_hardware_children[1].subtitle, 64, "128 MB Unified RAM");
     }
-
-    snprintf(settings_sysinfo_children[1].subtitle, 64, "%d MB Total (%lu MB Free)", phys_ram_mb, free_mb);
 
     // 2. Dynamic Kernel Version Query
     if (XboxKrnlVersion.Major != 0 || XboxKrnlVersion.Build != 0) {
-        snprintf(settings_sysinfo_children[2].subtitle, 64, "Kernel v%u.%u.%u.%u",
+        snprintf(info_hardware_children[2].subtitle, 64, "Kernel v%u.%u.%u.%u",
             XboxKrnlVersion.Major, XboxKrnlVersion.Minor, XboxKrnlVersion.Build, XboxKrnlVersion.Qfe);
     } else {
-        snprintf(settings_sysinfo_children[2].subtitle, 64, "Xbox Kernel 1.0 (Retail/Debug)");
+        snprintf(info_hardware_children[2].subtitle, 64, "Xbox Kernel (Homebrew/Retail)");
     }
 
-    // 3. Dynamic Video Mode & Hardware Query
+    // 3. Dynamic Video Mode Query
     VIDEO_MODE vm = XVideoGetMode();
     DWORD dwEnc = XVideoGetEncoderSettings();
 
-    // Active Display Output
-    snprintf(settings_video_children[0].title, 64, "Active Video Mode");
-    snprintf(settings_video_children[0].subtitle, 64, "%dx%d @ %dHz (%dbpp)",
-        vm.width, vm.height, vm.refresh ? vm.refresh : 60, vm.bpp ? vm.bpp : 32);
-
-    // 720p HD Status
-    snprintf(settings_video_children[1].title, 64, "720p HD Mode");
-    snprintf(settings_video_children[1].subtitle, 64, (dwEnc & VIDEO_MODE_720P) ? "Enabled in EEPROM" : "Disabled");
-
-    // 480p Progressive Status
-    snprintf(settings_video_children[2].title, 64, "480p Progressive");
-    snprintf(settings_video_children[2].subtitle, 64, (dwEnc & VIDEO_MODE_480P) ? "Enabled in EEPROM" : "Disabled");
-
-    // 1080i High-Def Status
-    snprintf(settings_video_children[3].title, 64, "1080i High-Def");
-    snprintf(settings_video_children[3].subtitle, 64, (dwEnc & VIDEO_MODE_1080I) ? "Enabled in EEPROM" : "Disabled");
-
-    // Widescreen Status
-    snprintf(settings_video_children[4].title, 64, "Aspect Ratio");
-    snprintf(settings_video_children[4].subtitle, 64, (dwEnc & VIDEO_WIDESCREEN) ? "16:9 Widescreen" : "4:3 Standard");
+    snprintf(info_hardware_children[3].title, 64, "Active Video Output");
+    snprintf(info_hardware_children[3].subtitle, 64, "%dx%d @ %dHz (%dbpp)",
+        vm.width ? vm.width : 640,
+        vm.height ? vm.height : 480,
+        vm.refresh ? vm.refresh : 60,
+        vm.bpp ? vm.bpp : 32);
 
     // 4. Dynamic Hard Drive Partition Free Space
     const char* drive_letters[] = { "C:\\", "E:\\", "F:\\", "G:\\" };
@@ -108,131 +66,52 @@ void menu_tree_refresh_system_info(void) {
 
     for (int d = 0; d < 4; d++) {
         ULARGE_INTEGER free_bytes, total_bytes, total_free_bytes;
-        strncpy(apps_storage_children[d].title, drive_labels[d], 64);
+        strncpy(info_storage_children[d].title, drive_labels[d], 64);
         if (GetDiskFreeSpaceExA(drive_letters[d], &free_bytes, &total_bytes, &total_free_bytes)) {
             unsigned long total_mb = (unsigned long)(total_bytes.QuadPart / (1024 * 1024));
             unsigned long free_mb = (unsigned long)(free_bytes.QuadPart / (1024 * 1024));
-            snprintf(apps_storage_children[d].subtitle, 64, "%lu MB Total / %lu MB Free", total_mb, free_mb);
+            snprintf(info_storage_children[d].subtitle, 64, "%lu MB Total / %lu MB Free", total_mb, free_mb);
         } else {
-            snprintf(apps_storage_children[d].subtitle, 64, "Not mounted");
+            snprintf(info_storage_children[d].subtitle, 64, "Not mounted");
         }
-        apps_storage_children[d].type = NODE_TYPE_INFO;
+        info_storage_children[d].type = NODE_TYPE_INFO;
     }
+
+    // 5. Video Settings Status
+    snprintf(settings_video_children[0].title, 64, "720p HD Mode");
+    snprintf(settings_video_children[0].subtitle, 64, (dwEnc & VIDEO_MODE_720P) ? "Enabled" : "Disabled");
+
+    snprintf(settings_video_children[1].title, 64, "480p Progressive");
+    snprintf(settings_video_children[1].subtitle, 64, (dwEnc & VIDEO_MODE_480P) ? "Enabled" : "Disabled");
+
+    snprintf(settings_video_children[2].title, 64, "1080i High-Def");
+    snprintf(settings_video_children[2].subtitle, 64, (dwEnc & VIDEO_MODE_1080I) ? "Enabled" : "Disabled");
+
+    snprintf(settings_video_children[3].title, 64, "Aspect Ratio");
+    snprintf(settings_video_children[3].subtitle, 64, (dwEnc & VIDEO_WIDESCREEN) ? "16:9 Widescreen" : "4:3 Standard");
+
+    snprintf(settings_video_children[4].title, 64, "Display Refresh");
+    snprintf(settings_video_children[4].subtitle, 64, "60Hz NTSC");
 }
 
 void menu_tree_init(XMBNode* root_categories, int max_games) {
     (void)max_games;
 
     // ==========================================
-    // 1. INFO CATEGORY TREE
+    // 1. GAMES CATEGORY TREE
     // ==========================================
-    
-    // Theme Customization Submenu
-    strncpy(settings_theme_children[0].title, "Cycle Wave Theme", 64);
-    strncpy(settings_theme_children[0].subtitle, "PS3 Obsidian / Xbox Green / Blue / Ruby", 64);
-    settings_theme_children[0].type = NODE_TYPE_THEME_CYCLE;
-
-    strncpy(settings_theme_children[1].title, "Theme: Xbox Emerald", 64);
-    strncpy(settings_theme_children[1].subtitle, "Signature Xbox Green & Jade Wave", 64);
-    settings_theme_children[1].type = NODE_TYPE_ACTION;
-
-    strncpy(settings_theme_children[2].title, "Theme: PS3 Obsidian", 64);
-    strncpy(settings_theme_children[2].subtitle, "Smoked Charcoal & Ice Blue Wave", 64);
-    settings_theme_children[2].type = NODE_TYPE_ACTION;
-
-    strncpy(settings_theme_children[3].title, "Theme: Cobalt Sapphire", 64);
-    strncpy(settings_theme_children[3].subtitle, "Electric Ocean Blue Wave", 64);
-    settings_theme_children[3].type = NODE_TYPE_ACTION;
-
-    strncpy(settings_theme_children[4].title, "Theme: Ruby Crimson", 64);
-    strncpy(settings_theme_children[4].subtitle, "Warm Scarlet & Amber Wave", 64);
-    settings_theme_children[4].type = NODE_TYPE_ACTION;
-
-    // System Information Submenu
-    strncpy(settings_sysinfo_children[0].title, "Console Hardware", 64);
-    strncpy(settings_sysinfo_children[0].subtitle, "Original Xbox (x86 Coppermine 733MHz)", 64);
-    settings_sysinfo_children[0].type = NODE_TYPE_INFO;
-
-    strncpy(settings_sysinfo_children[1].title, "System Memory", 64);
-    strncpy(settings_sysinfo_children[1].subtitle, "Detecting RAM...", 64);
-    settings_sysinfo_children[1].type = NODE_TYPE_INFO;
-
-    strncpy(settings_sysinfo_children[2].title, "BIOS / Kernel", 64);
-    strncpy(settings_sysinfo_children[2].subtitle, "Querying Kernel...", 64);
-    settings_sysinfo_children[2].type = NODE_TYPE_INFO;
-
-    strncpy(settings_sysinfo_children[3].title, "Video Encoder", 64);
-    strncpy(settings_sysinfo_children[3].subtitle, "Conexant / Focus CX25871 HDTV", 64);
-    settings_sysinfo_children[3].type = NODE_TYPE_INFO;
-
-    strncpy(settings_sysinfo_children[4].title, "Dashboard Version", 64);
-    strncpy(settings_sysinfo_children[4].subtitle, "OGX-XMB v1.0 (Sony PS3 Style)", 64);
-    settings_sysinfo_children[4].type = NODE_TYPE_INFO;
-
-    // Display Settings Submenu
-    for (int v = 0; v < 5; v++) {
-        settings_video_children[v].type = NODE_TYPE_INFO;
+    static XMBItem scanned_games[64];
+    int game_count = xbe_scanner_get_items(CATEGORY_GAMES, scanned_games, 64);
+    for (int i = 0; i < game_count; i++) {
+        strncpy(games_root_children[i].title, scanned_games[i].title, 64);
+        strncpy(games_root_children[i].path, scanned_games[i].path, 256);
+        strncpy(games_root_children[i].icon_path, scanned_games[i].icon_path, 256);
+        strncpy(games_root_children[i].subtitle, "Original Xbox Title", 64);
+        games_root_children[i].type = NODE_TYPE_LAUNCH;
     }
 
-    // Audio Settings Submenu
-    strncpy(settings_audio_children[0].title, "Digital Output", 64);
-    strncpy(settings_audio_children[0].subtitle, "Dolby Digital 5.1 (Optical)", 64);
-    settings_audio_children[0].type = NODE_TYPE_ACTION;
-
-    strncpy(settings_audio_children[1].title, "DTS Surround", 64);
-    strncpy(settings_audio_children[1].subtitle, "Enabled", 64);
-    settings_audio_children[1].type = NODE_TYPE_ACTION;
-
-    strncpy(settings_audio_children[2].title, "UI Navigation Sounds", 64);
-    strncpy(settings_audio_children[2].subtitle, "Enabled (100% Volume)", 64);
-    settings_audio_children[2].type = NODE_TYPE_ACTION;
-
-    // Network Settings Submenu
-    strncpy(settings_network_children[0].title, "Network Protocol", 64);
-    strncpy(settings_network_children[0].subtitle, "DHCP (Automatic)", 64);
-    settings_network_children[0].type = NODE_TYPE_INFO;
-
-    strncpy(settings_network_children[1].title, "IP Address", 64);
-    strncpy(settings_network_children[1].subtitle, "192.168.0.100", 64);
-    settings_network_children[1].type = NODE_TYPE_INFO;
-
-    strncpy(settings_network_children[2].title, "Gateway / Subnet", 64);
-    strncpy(settings_network_children[2].subtitle, "192.168.0.1 / 255.255.255.0", 64);
-    settings_network_children[2].type = NODE_TYPE_INFO;
-
-    // Info Root Menu
-    strncpy(settings_root_children[0].title, "Theme Settings", 64);
-    strncpy(settings_root_children[0].subtitle, "PS3 Wave & Accent Color Palettes", 64);
-    settings_root_children[0].type = NODE_TYPE_SUBMENU;
-    settings_root_children[0].children = settings_theme_children;
-    settings_root_children[0].child_count = 5;
-
-    strncpy(settings_root_children[1].title, "System Information", 64);
-    strncpy(settings_root_children[1].subtitle, "Kernel, Memory, Hardware specs", 64);
-    settings_root_children[1].type = NODE_TYPE_SUBMENU;
-    settings_root_children[1].children = settings_sysinfo_children;
-    settings_root_children[1].child_count = 5;
-
-    strncpy(settings_root_children[2].title, "Display Settings", 64);
-    strncpy(settings_root_children[2].subtitle, "Resolution, Widescreen 16:9", 64);
-    settings_root_children[2].type = NODE_TYPE_SUBMENU;
-    settings_root_children[2].children = settings_video_children;
-    settings_root_children[2].child_count = 5;
-
-    strncpy(settings_root_children[3].title, "Audio Settings", 64);
-    strncpy(settings_root_children[3].subtitle, "Dolby Digital 5.1 & UI sounds", 64);
-    settings_root_children[3].type = NODE_TYPE_SUBMENU;
-    settings_root_children[3].children = settings_audio_children;
-    settings_root_children[3].child_count = 3;
-
-    strncpy(settings_root_children[4].title, "Network Settings", 64);
-    strncpy(settings_root_children[4].subtitle, "Ethernet, IP address, Gateway", 64);
-    settings_root_children[4].type = NODE_TYPE_SUBMENU;
-    settings_root_children[4].children = settings_network_children;
-    settings_root_children[4].child_count = 3;
-
-    root_categories[CATEGORY_INFO].children = settings_root_children;
-    root_categories[CATEGORY_INFO].child_count = 5;
+    root_categories[CATEGORY_GAMES].children = games_root_children;
+    root_categories[CATEGORY_GAMES].child_count = game_count;
 
     // ==========================================
     // 2. APPS CATEGORY TREE
@@ -256,32 +135,131 @@ void menu_tree_init(XMBNode* root_categories, int max_games) {
     apps_root_children[0].children = apps_utils_children;
     apps_root_children[0].child_count = 3;
 
-    strncpy(apps_root_children[1].title, "Hard Drive Partitions", 64);
-    strncpy(apps_root_children[1].subtitle, "Live drive capacity and free space", 64);
-    apps_root_children[1].type = NODE_TYPE_SUBMENU;
-    apps_root_children[1].children = apps_storage_children;
-    apps_root_children[1].child_count = 4;
-
     root_categories[CATEGORY_APPS].children = apps_root_children;
-    root_categories[CATEGORY_APPS].child_count = 2;
+    root_categories[CATEGORY_APPS].child_count = 1;
 
     // ==========================================
-    // 3. GAMES CATEGORY TREE
+    // 3. INFO CATEGORY TREE (Read-Only Stats)
     // ==========================================
-    static XMBItem scanned_games[64];
-    int game_count = xbe_scanner_get_items(CATEGORY_GAMES, scanned_games, 64);
-    for (int i = 0; i < game_count; i++) {
-        strncpy(games_root_children[i].title, scanned_games[i].title, 64);
-        strncpy(games_root_children[i].path, scanned_games[i].path, 256);
-        strncpy(games_root_children[i].icon_path, scanned_games[i].icon_path, 256);
-        strncpy(games_root_children[i].subtitle, "Original Xbox Title", 64);
-        games_root_children[i].type = NODE_TYPE_LAUNCH;
+    strncpy(info_hardware_children[0].title, "Console Architecture", 64);
+    strncpy(info_hardware_children[0].subtitle, "Intel Pentium III Coppermine (733MHz)", 64);
+    info_hardware_children[0].type = NODE_TYPE_INFO;
+
+    strncpy(info_hardware_children[1].title, "System Memory (RAM)", 64);
+    strncpy(info_hardware_children[1].subtitle, "Detecting memory...", 64);
+    info_hardware_children[1].type = NODE_TYPE_INFO;
+
+    strncpy(info_hardware_children[2].title, "BIOS / Kernel", 64);
+    strncpy(info_hardware_children[2].subtitle, "Reading version...", 64);
+    info_hardware_children[2].type = NODE_TYPE_INFO;
+
+    strncpy(info_hardware_children[3].title, "Active Video Output", 64);
+    strncpy(info_hardware_children[3].subtitle, "640x480 @ 60Hz", 64);
+    info_hardware_children[3].type = NODE_TYPE_INFO;
+
+    strncpy(info_hardware_children[4].title, "Dashboard Version", 64);
+    strncpy(info_hardware_children[4].subtitle, "OGX-XMB v1.0 (Sony PS3 Cross Media Bar)", 64);
+    info_hardware_children[4].type = NODE_TYPE_INFO;
+
+    strncpy(info_root_children[0].title, "Hardware & Kernel", 64);
+    strncpy(info_root_children[0].subtitle, "CPU, RAM, GPU, and BIOS diagnostics", 64);
+    info_root_children[0].type = NODE_TYPE_SUBMENU;
+    info_root_children[0].children = info_hardware_children;
+    info_root_children[0].child_count = 5;
+
+    strncpy(info_root_children[1].title, "Storage Partitions", 64);
+    strncpy(info_root_children[1].subtitle, "Live capacity and free disk space", 64);
+    info_root_children[1].type = NODE_TYPE_SUBMENU;
+    info_root_children[1].children = info_storage_children;
+    info_root_children[1].child_count = 4;
+
+    strncpy(info_root_children[2].title, "Network Status", 64);
+    strncpy(info_root_children[2].subtitle, "DHCP Auto (192.168.0.100)", 64);
+    info_root_children[2].type = NODE_TYPE_INFO;
+
+    root_categories[CATEGORY_INFO].children = info_root_children;
+    root_categories[CATEGORY_INFO].child_count = 3;
+
+    // ==========================================
+    // 4. SETTINGS CATEGORY TREE (Configurable)
+    // ==========================================
+    
+    // Theme Settings
+    strncpy(settings_theme_children[0].title, "Cycle Wave Theme", 64);
+    strncpy(settings_theme_children[0].subtitle, "PS3 Obsidian / Xbox Green / Blue / Ruby", 64);
+    settings_theme_children[0].type = NODE_TYPE_THEME_CYCLE;
+
+    strncpy(settings_theme_children[1].title, "Theme: Xbox Emerald", 64);
+    strncpy(settings_theme_children[1].subtitle, "Signature Xbox Green & Jade Wave", 64);
+    settings_theme_children[1].type = NODE_TYPE_ACTION;
+
+    strncpy(settings_theme_children[2].title, "Theme: PS3 Obsidian", 64);
+    strncpy(settings_theme_children[2].subtitle, "Smoked Charcoal & Ice Blue Wave", 64);
+    settings_theme_children[2].type = NODE_TYPE_ACTION;
+
+    strncpy(settings_theme_children[3].title, "Theme: Cobalt Sapphire", 64);
+    strncpy(settings_theme_children[3].subtitle, "Electric Ocean Blue Wave", 64);
+    settings_theme_children[3].type = NODE_TYPE_ACTION;
+
+    strncpy(settings_theme_children[4].title, "Theme: Ruby Crimson", 64);
+    strncpy(settings_theme_children[4].subtitle, "Warm Scarlet & Amber Wave", 64);
+    settings_theme_children[4].type = NODE_TYPE_ACTION;
+
+    for (int s = 0; s < 5; s++) {
+        settings_video_children[s].type = NODE_TYPE_ACTION;
     }
 
-    root_categories[CATEGORY_GAMES].children = games_root_children;
-    root_categories[CATEGORY_GAMES].child_count = game_count;
+    // Audio Settings
+    strncpy(settings_audio_children[0].title, "Digital Output", 64);
+    strncpy(settings_audio_children[0].subtitle, "Dolby Digital 5.1 (Optical)", 64);
+    settings_audio_children[0].type = NODE_TYPE_ACTION;
 
-    // Populate live statistics
+    strncpy(settings_audio_children[1].title, "DTS Surround", 64);
+    strncpy(settings_audio_children[1].subtitle, "Enabled", 64);
+    settings_audio_children[1].type = NODE_TYPE_ACTION;
+
+    strncpy(settings_audio_children[2].title, "UI Navigation Sounds", 64);
+    strncpy(settings_audio_children[2].subtitle, "Enabled (100% Volume)", 64);
+    settings_audio_children[2].type = NODE_TYPE_ACTION;
+
+    // Network Settings
+    strncpy(settings_network_children[0].title, "IP Assignment", 64);
+    strncpy(settings_network_children[0].subtitle, "DHCP (Automatic)", 64);
+    settings_network_children[0].type = NODE_TYPE_ACTION;
+
+    strncpy(settings_network_children[1].title, "DNS Configuration", 64);
+    strncpy(settings_network_children[1].subtitle, "Automatic from Router", 64);
+    settings_network_children[1].type = NODE_TYPE_ACTION;
+
+    // Settings Root Nodes
+    strncpy(settings_root_children[0].title, "Theme & Appearance", 64);
+    strncpy(settings_root_children[0].subtitle, "PS3 Wave & Color Palette presets", 64);
+    settings_root_children[0].type = NODE_TYPE_SUBMENU;
+    settings_root_children[0].children = settings_theme_children;
+    settings_root_children[0].child_count = 5;
+
+    strncpy(settings_root_children[1].title, "Display Settings", 64);
+    strncpy(settings_root_children[1].subtitle, "Resolution, 720p, Widescreen 16:9", 64);
+    settings_root_children[1].type = NODE_TYPE_SUBMENU;
+    settings_root_children[1].children = settings_video_children;
+    settings_root_children[1].child_count = 5;
+
+    strncpy(settings_root_children[2].title, "Audio Settings", 64);
+    strncpy(settings_root_children[2].subtitle, "Dolby Digital 5.1 & UI sounds", 64);
+    settings_root_children[2].type = NODE_TYPE_SUBMENU;
+    settings_root_children[2].children = settings_audio_children;
+    settings_root_children[2].child_count = 3;
+
+    strncpy(settings_root_children[3].title, "Network Settings", 64);
+    strncpy(settings_root_children[3].subtitle, "DHCP, Static IP, DNS", 64);
+    settings_root_children[3].type = NODE_TYPE_SUBMENU;
+    settings_root_children[3].children = settings_network_children;
+    settings_root_children[3].child_count = 2;
+
+    root_categories[CATEGORY_SETTINGS].children = settings_root_children;
+    root_categories[CATEGORY_SETTINGS].child_count = 4;
+
+    // Refresh live stats safely
     menu_tree_refresh_system_info();
 }
 
