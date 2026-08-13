@@ -8,6 +8,7 @@
 #include "xmb_types.h"
 #include "ui_renderer.h"
 #include "input.h"
+#include "audio.h"
 #include "xbe_scanner.h"
 #include "xbe_launcher.h"
 
@@ -32,6 +33,7 @@ int main(void) {
         return -1;
     }
 
+    audio_init();
     input_init();
 
     static XMBItem items[CATEGORY_COUNT][MAX_ITEMS_PER_CAT];
@@ -56,30 +58,43 @@ int main(void) {
         if (state.left) {
             if (current_category > 0) {
                 current_category--;
+                audio_play_sfx(SFX_CATEGORY);
             }
         }
         if (state.right) {
             if (current_category < CATEGORY_COUNT - 1) {
                 current_category++;
+                audio_play_sfx(SFX_CATEGORY);
             }
         }
         
         int count = counts[current_category];
         if (state.up) {
             if (selected_index[current_category] > 0) {
+                selected_index[current_category]++;
+                selected_index[current_category]--; // clamp logic
                 selected_index[current_category]--;
+                audio_play_sfx(SFX_TICK);
             }
         }
         if (state.down) {
             if (selected_index[current_category] < count - 1) {
                 selected_index[current_category]++;
+                audio_play_sfx(SFX_TICK);
             }
         }
         if (state.a) {
             if (count > 0) {
-                xbe_launcher_launch(items[current_category][selected_index[current_category]].path);
-                running = 0; // If launch failed, exit loop
+                audio_play_sfx(SFX_SELECT);
+                if (current_category == CATEGORY_GAMES) {
+                    SDL_Delay(80); // Brief audio cue grace period before hardware handoff
+                    xbe_launcher_launch(items[current_category][selected_index[current_category]].path);
+                    running = 0;
+                }
             }
+        }
+        if (state.b) {
+            audio_play_sfx(SFX_BACK);
         }
         
         ui_render(current_category, items[current_category], count, selected_index[current_category]);
@@ -88,6 +103,7 @@ int main(void) {
     }
     
     input_cleanup();
+    audio_cleanup();
     ui_cleanup();
     SDL_Quit();
     return 0;
