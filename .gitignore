@@ -1,0 +1,19 @@
+# Build Outputs
+bin/
+*.exe
+*.lib
+*.obj
+*.iso
+*.qcow2
+*.bin
+*.tmp
+*.zip
+
+# Deployment staging directories
+c_part/
+e_part/
+hdd_zip/
+
+# User payloads & SDK
+Games/
+nxdk/
