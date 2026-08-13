@@ -3,27 +3,95 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <windows.h>
 #include <hal/xbox.h>
+#include <hal/video.h>
+#include <xboxkrnl/xboxkrnl.h>
 
 // Static storage for hierarchical nodes
 static XMBNode settings_theme_children[5];
 static XMBNode settings_sysinfo_children[5];
-static XMBNode settings_video_children[4];
+static XMBNode settings_video_children[5];
 static XMBNode settings_audio_children[3];
 static XMBNode settings_network_children[3];
 static XMBNode settings_root_children[5];
 
 static XMBNode apps_utils_children[3];
-static XMBNode apps_storage_children[3];
+static XMBNode apps_storage_children[4];
 static XMBNode apps_root_children[2];
 
 static XMBNode games_root_children[64];
+
+void menu_tree_refresh_system_info(void) {
+    // 1. Dynamic System Memory Query
+    MM_STATISTICS mm_stats;
+    memset(&mm_stats, 0, sizeof(mm_stats));
+    mm_stats.Length = sizeof(MM_STATISTICS);
+    
+    if (NT_SUCCESS(MmQueryStatistics(&mm_stats))) {
+        unsigned long total_mb = (mm_stats.TotalPhysicalPages * 4) / 1024;
+        unsigned long free_mb = (mm_stats.AvailablePages * 4) / 1024;
+        snprintf(settings_sysinfo_children[1].subtitle, 64, "%lu MB Total / %lu MB Free", total_mb, free_mb);
+    } else {
+        snprintf(settings_sysinfo_children[1].subtitle, 64, "64 MB DDR RAM");
+    }
+
+    // 2. Dynamic Kernel Version Query
+    if (XboxKrnlVersion.Major != 0 || XboxKrnlVersion.Build != 0) {
+        snprintf(settings_sysinfo_children[2].subtitle, 64, "Kernel v%u.%u.%u.%u",
+            XboxKrnlVersion.Major, XboxKrnlVersion.Minor, XboxKrnlVersion.Build, XboxKrnlVersion.Qfe);
+    } else {
+        snprintf(settings_sysinfo_children[2].subtitle, 64, "Xbox Kernel 1.0 (Retail/Debug)");
+    }
+
+    // 3. Dynamic Video Mode & Hardware Query
+    VIDEO_MODE vm = XVideoGetMode();
+    DWORD dwEnc = XVideoGetEncoderSettings();
+
+    // Active Display Output
+    snprintf(settings_video_children[0].title, 64, "Active Video Mode");
+    snprintf(settings_video_children[0].subtitle, 64, "%dx%d @ %dHz (%dbpp)",
+        vm.width, vm.height, vm.refresh ? vm.refresh : 60, vm.bpp ? vm.bpp : 32);
+
+    // 720p HD Status
+    snprintf(settings_video_children[1].title, 64, "720p HD Mode");
+    snprintf(settings_video_children[1].subtitle, 64, (dwEnc & VIDEO_MODE_720P) ? "Enabled in EEPROM" : "Disabled");
+
+    // 480p Progressive Status
+    snprintf(settings_video_children[2].title, 64, "480p Progressive");
+    snprintf(settings_video_children[2].subtitle, 64, (dwEnc & VIDEO_MODE_480P) ? "Enabled in EEPROM" : "Disabled");
+
+    // 1080i High-Def Status
+    snprintf(settings_video_children[3].title, 64, "1080i High-Def");
+    snprintf(settings_video_children[3].subtitle, 64, (dwEnc & VIDEO_MODE_1080I) ? "Enabled in EEPROM" : "Disabled");
+
+    // Widescreen Status
+    snprintf(settings_video_children[4].title, 64, "Aspect Ratio");
+    snprintf(settings_video_children[4].subtitle, 64, (dwEnc & VIDEO_WIDESCREEN) ? "16:9 Widescreen" : "4:3 Standard");
+
+    // 4. Dynamic Hard Drive Partition Free Space
+    const char* drive_letters[] = { "C:\\", "E:\\", "F:\\", "G:\\" };
+    const char* drive_labels[] = { "Drive C: (System)", "Drive E: (Dashboard & Games)", "Drive F: (Extended)", "Drive G: (Extended 2)" };
+
+    for (int d = 0; d < 4; d++) {
+        ULARGE_INTEGER free_bytes, total_bytes, total_free_bytes;
+        strncpy(apps_storage_children[d].title, drive_labels[d], 64);
+        if (GetDiskFreeSpaceExA(drive_letters[d], &free_bytes, &total_bytes, &total_free_bytes)) {
+            unsigned long total_mb = (unsigned long)(total_bytes.QuadPart / (1024 * 1024));
+            unsigned long free_mb = (unsigned long)(free_bytes.QuadPart / (1024 * 1024));
+            snprintf(apps_storage_children[d].subtitle, 64, "%lu MB Total / %lu MB Free", total_mb, free_mb);
+        } else {
+            snprintf(apps_storage_children[d].subtitle, 64, "Not mounted");
+        }
+        apps_storage_children[d].type = NODE_TYPE_INFO;
+    }
+}
 
 void menu_tree_init(XMBNode* root_categories, int max_games) {
     (void)max_games;
 
     // ==========================================
-    // 1. SETTINGS CATEGORY TREE
+    // 1. INFO CATEGORY TREE
     // ==========================================
     
     // Theme Customization Submenu
@@ -47,45 +115,33 @@ void menu_tree_init(XMBNode* root_categories, int max_games) {
     strncpy(settings_theme_children[4].subtitle, "Warm Scarlet & Amber Wave", 64);
     settings_theme_children[4].type = NODE_TYPE_ACTION;
 
-    // System Information
+    // System Information Submenu
     strncpy(settings_sysinfo_children[0].title, "Console Hardware", 64);
     strncpy(settings_sysinfo_children[0].subtitle, "Original Xbox (x86 Coppermine 733MHz)", 64);
     settings_sysinfo_children[0].type = NODE_TYPE_INFO;
 
     strncpy(settings_sysinfo_children[1].title, "System Memory", 64);
-    strncpy(settings_sysinfo_children[1].subtitle, "64 MB Unified DDR RAM", 64);
+    strncpy(settings_sysinfo_children[1].subtitle, "Detecting RAM...", 64);
     settings_sysinfo_children[1].type = NODE_TYPE_INFO;
 
     strncpy(settings_sysinfo_children[2].title, "BIOS / Kernel", 64);
-    strncpy(settings_sysinfo_children[2].subtitle, "Complex v1.03 (512K TSOP)", 64);
+    strncpy(settings_sysinfo_children[2].subtitle, "Querying Kernel...", 64);
     settings_sysinfo_children[2].type = NODE_TYPE_INFO;
 
     strncpy(settings_sysinfo_children[3].title, "Video Encoder", 64);
-    strncpy(settings_sysinfo_children[3].subtitle, "Conexant CX25871 HDTV", 64);
+    strncpy(settings_sysinfo_children[3].subtitle, "Conexant / Focus CX25871 HDTV", 64);
     settings_sysinfo_children[3].type = NODE_TYPE_INFO;
 
     strncpy(settings_sysinfo_children[4].title, "Dashboard Version", 64);
     strncpy(settings_sysinfo_children[4].subtitle, "OGX-XMB v1.0 (Sony PS3 Style)", 64);
     settings_sysinfo_children[4].type = NODE_TYPE_INFO;
 
-    // Display Settings
-    strncpy(settings_video_children[0].title, "720p HD Output", 64);
-    strncpy(settings_video_children[0].subtitle, "Enabled (1280x720 60Hz)", 64);
-    settings_video_children[0].type = NODE_TYPE_ACTION;
+    // Display Settings Submenu
+    for (int v = 0; v < 5; v++) {
+        settings_video_children[v].type = NODE_TYPE_INFO;
+    }
 
-    strncpy(settings_video_children[1].title, "480p Progressive", 64);
-    strncpy(settings_video_children[1].subtitle, "Enabled", 64);
-    settings_video_children[1].type = NODE_TYPE_ACTION;
-
-    strncpy(settings_video_children[2].title, "1080i High-Def", 64);
-    strncpy(settings_video_children[2].subtitle, "Disabled", 64);
-    settings_video_children[2].type = NODE_TYPE_ACTION;
-
-    strncpy(settings_video_children[3].title, "Widescreen Format", 64);
-    strncpy(settings_video_children[3].subtitle, "16:9 Aspect Ratio", 64);
-    settings_video_children[3].type = NODE_TYPE_ACTION;
-
-    // Audio Settings
+    // Audio Settings Submenu
     strncpy(settings_audio_children[0].title, "Digital Output", 64);
     strncpy(settings_audio_children[0].subtitle, "Dolby Digital 5.1 (Optical)", 64);
     settings_audio_children[0].type = NODE_TYPE_ACTION;
@@ -98,7 +154,7 @@ void menu_tree_init(XMBNode* root_categories, int max_games) {
     strncpy(settings_audio_children[2].subtitle, "Enabled (100% Volume)", 64);
     settings_audio_children[2].type = NODE_TYPE_ACTION;
 
-    // Network Settings
+    // Network Settings Submenu
     strncpy(settings_network_children[0].title, "Network Protocol", 64);
     strncpy(settings_network_children[0].subtitle, "DHCP (Automatic)", 64);
     settings_network_children[0].type = NODE_TYPE_INFO;
@@ -111,7 +167,7 @@ void menu_tree_init(XMBNode* root_categories, int max_games) {
     strncpy(settings_network_children[2].subtitle, "192.168.0.1 / 255.255.255.0", 64);
     settings_network_children[2].type = NODE_TYPE_INFO;
 
-    // Settings Root Menu
+    // Info Root Menu
     strncpy(settings_root_children[0].title, "Theme Settings", 64);
     strncpy(settings_root_children[0].subtitle, "PS3 Wave & Accent Color Palettes", 64);
     settings_root_children[0].type = NODE_TYPE_SUBMENU;
@@ -128,7 +184,7 @@ void menu_tree_init(XMBNode* root_categories, int max_games) {
     strncpy(settings_root_children[2].subtitle, "Resolution, Widescreen 16:9", 64);
     settings_root_children[2].type = NODE_TYPE_SUBMENU;
     settings_root_children[2].children = settings_video_children;
-    settings_root_children[2].child_count = 4;
+    settings_root_children[2].child_count = 5;
 
     strncpy(settings_root_children[3].title, "Audio Settings", 64);
     strncpy(settings_root_children[3].subtitle, "Dolby Digital 5.1 & UI sounds", 64);
@@ -161,19 +217,6 @@ void menu_tree_init(XMBNode* root_categories, int max_games) {
     strncpy(apps_utils_children[2].path, "C:\\xboxdash.xbe", 256);
     apps_utils_children[2].type = NODE_TYPE_LAUNCH;
 
-    strncpy(apps_storage_children[0].title, "Drive C: (System)", 64);
-    strncpy(apps_storage_children[0].subtitle, "490 MB Total / 280 MB Free", 64);
-    apps_storage_children[0].type = NODE_TYPE_INFO;
-
-    strncpy(apps_storage_children[1].title, "Drive E: (Games / Data)", 64);
-    strncpy(apps_storage_children[1].subtitle, "4890 MB Total / 2150 MB Free", 64);
-    apps_storage_children[1].type = NODE_TYPE_INFO;
-
-    strncpy(apps_storage_children[2].title, "Drive F: (Extended)", 64);
-    strncpy(apps_storage_children[2].subtitle, "Not mounted", 64);
-    apps_storage_children[2].type = NODE_TYPE_INFO;
-
-    // Apps Root Menu
     strncpy(apps_root_children[0].title, "System Utilities", 64);
     strncpy(apps_root_children[0].subtitle, "Reboot, Power, Stock Dash", 64);
     apps_root_children[0].type = NODE_TYPE_SUBMENU;
@@ -181,10 +224,10 @@ void menu_tree_init(XMBNode* root_categories, int max_games) {
     apps_root_children[0].child_count = 3;
 
     strncpy(apps_root_children[1].title, "Hard Drive Partitions", 64);
-    strncpy(apps_root_children[1].subtitle, "Drive capacity and free space", 64);
+    strncpy(apps_root_children[1].subtitle, "Live drive capacity and free space", 64);
     apps_root_children[1].type = NODE_TYPE_SUBMENU;
     apps_root_children[1].children = apps_storage_children;
-    apps_root_children[1].child_count = 3;
+    apps_root_children[1].child_count = 4;
 
     root_categories[CATEGORY_APPS].children = apps_root_children;
     root_categories[CATEGORY_APPS].child_count = 2;
@@ -204,6 +247,9 @@ void menu_tree_init(XMBNode* root_categories, int max_games) {
 
     root_categories[CATEGORY_GAMES].children = games_root_children;
     root_categories[CATEGORY_GAMES].child_count = game_count;
+
+    // Populate live statistics
+    menu_tree_refresh_system_info();
 }
 
 XMBNode* menu_tree_get_active_list(XMBNavContext* ctx, XMBCategory cat, XMBNode* root_categories, int* out_count) {
