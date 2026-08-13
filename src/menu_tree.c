@@ -22,19 +22,52 @@ static XMBNode apps_root_children[2];
 
 static XMBNode games_root_children[64];
 
+static int detect_physical_ram_mb(void) {
+    // Probe physical uncached direct map at 64MB offset (0xA4000000)
+    // Xbox memory direct map is: Cached = 0x80000000 + phys, Uncached = 0xA0000000 + phys
+    volatile uint32_t* ptr_low  = (volatile uint32_t*)0xA0200000;
+    volatile uint32_t* ptr_high = (volatile uint32_t*)0xA4200000;
+
+    uint32_t orig_low = *ptr_low;
+    uint32_t orig_high = *ptr_high;
+
+    *ptr_low = 0xAA55AA55;
+    *ptr_high = 0x55AA55AA;
+
+    int is_128mb = 0;
+    if (*ptr_low == 0xAA55AA55 && *ptr_high == 0x55AA55AA) {
+        *ptr_high = 0x12345678;
+        if (*ptr_low == 0xAA55AA55 && *ptr_high == 0x12345678) {
+            is_128mb = 1;
+        }
+    }
+
+    *ptr_low = orig_low;
+    *ptr_high = orig_high;
+
+    return is_128mb ? 128 : 64;
+}
+
 void menu_tree_refresh_system_info(void) {
-    // 1. Dynamic System Memory Query
+    // 1. Dynamic System Memory Detection
+    int phys_ram_mb = detect_physical_ram_mb();
+
     MM_STATISTICS mm_stats;
     memset(&mm_stats, 0, sizeof(mm_stats));
     mm_stats.Length = sizeof(MM_STATISTICS);
     
+    unsigned long free_mb = 0;
     if (NT_SUCCESS(MmQueryStatistics(&mm_stats))) {
-        unsigned long total_mb = (mm_stats.TotalPhysicalPages * 4) / 1024;
-        unsigned long free_mb = (mm_stats.AvailablePages * 4) / 1024;
-        snprintf(settings_sysinfo_children[1].subtitle, 64, "%lu MB Total / %lu MB Free", total_mb, free_mb);
+        unsigned long kernel_total_mb = (mm_stats.TotalPhysicalPages * 4) / 1024;
+        free_mb = (mm_stats.AvailablePages * 4) / 1024;
+        if (phys_ram_mb == 128 && kernel_total_mb < 128) {
+            free_mb += (128 - kernel_total_mb);
+        }
     } else {
-        snprintf(settings_sysinfo_children[1].subtitle, 64, "64 MB DDR RAM");
+        free_mb = (phys_ram_mb == 128) ? 112 : 48;
     }
+
+    snprintf(settings_sysinfo_children[1].subtitle, 64, "%d MB Total (%lu MB Free)", phys_ram_mb, free_mb);
 
     // 2. Dynamic Kernel Version Query
     if (XboxKrnlVersion.Major != 0 || XboxKrnlVersion.Build != 0) {
