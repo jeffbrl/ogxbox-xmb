@@ -256,13 +256,61 @@ static void render_text_shadow(TTF_Font* f, const char* text, int x, int y, SDL_
     }
 }
 
+static XMBTheme current_theme = THEME_PS3_OBSIDIAN;
+
+typedef struct {
+    Uint8 bg_top_r, bg_top_g, bg_top_b;
+    Uint8 bg_bot_r, bg_bot_g, bg_bot_b;
+    Uint8 w1_r, w1_g, w1_b;
+    Uint8 w2_r, w2_g, w2_b;
+    Uint8 w3_r, w3_g, w3_b;
+    Uint8 p_r, p_g, p_b;
+    Uint8 glow_r, glow_g, glow_b;
+} ThemeColors;
+
+static const ThemeColors theme_palettes[THEME_COUNT] = {
+    // 0: PS3 Smoked Obsidian
+    { 10, 15, 22,   22, 41, 56,   90, 180, 240,  100, 220, 180,  130, 150, 255,  210, 240, 255,  100, 200, 255 },
+    // 1: Xbox Emerald
+    { 8, 18, 10,    14, 48, 20,   60, 235, 90,   120, 255, 140,  30, 180, 70,    180, 255, 200,  80, 240, 100 },
+    // 2: Cobalt Blue
+    { 6, 12, 28,    12, 28, 65,   50, 140, 255,  80, 180, 255,   40, 100, 240,   190, 225, 255,  70, 170, 255 },
+    // 3: Ruby Crimson
+    { 24, 8, 12,    55, 14, 22,   240, 70, 80,   255, 140, 80,   210, 50, 70,    255, 210, 200,  255, 90, 100 },
+    // 4: Cyberpunk Gold
+    { 18, 8, 26,    42, 16, 60,   255, 200, 50,  255, 160, 40,   200, 120, 240,  255, 235, 170,  255, 215, 60 }
+};
+
+void ui_set_theme(XMBTheme theme) {
+    if (theme < THEME_COUNT) {
+        current_theme = theme;
+    }
+}
+
+XMBTheme ui_get_theme(void) {
+    return current_theme;
+}
+
+const char* ui_get_theme_name(XMBTheme theme) {
+    switch (theme) {
+        case THEME_PS3_OBSIDIAN: return "PS3 Smoked Obsidian";
+        case THEME_XBOX_EMERALD: return "Xbox Emerald Green";
+        case THEME_COBALT_BLUE: return "Cobalt Sapphire";
+        case THEME_RUBY_CRIMSON: return "Ruby Crimson";
+        case THEME_CYBERPUNK_GOLD: return "Cyberpunk Gold";
+        default: return "Default";
+    }
+}
+
 static void render_ps3_wave(void) {
-    // 1. Vertical background gradient (Dark Charcoal / Smoked Obsidian to Deep Navy/Emerald)
+    const ThemeColors* tc = &theme_palettes[current_theme];
+
+    // 1. Vertical background gradient
     for (int y = 0; y < WINDOW_HEIGHT; y += 4) {
         float factor = (float)y / (float)WINDOW_HEIGHT;
-        Uint8 r = (Uint8)(10 + factor * 12);
-        Uint8 g = (Uint8)(15 + factor * 26);
-        Uint8 b = (Uint8)(22 + factor * 34);
+        Uint8 r = (Uint8)(tc->bg_top_r + factor * (tc->bg_bot_r - tc->bg_top_r));
+        Uint8 g = (Uint8)(tc->bg_top_g + factor * (tc->bg_bot_g - tc->bg_top_g));
+        Uint8 b = (Uint8)(tc->bg_top_b + factor * (tc->bg_bot_b - tc->bg_top_b));
         SDL_Rect line = { 0, y, WINDOW_WIDTH, 4 };
         SDL_SetRenderDrawColor(renderer, r, g, b, 255);
         SDL_RenderFillRect(renderer, &line);
@@ -278,9 +326,9 @@ static void render_ps3_wave(void) {
         Uint8 r, g, b, alpha;
         int thickness;
     } layers[3] = {
-        { 250.0f, 0.007f, 38.0f, 0.7f, 0.014f, 20.0f, 1.1f,  90, 180, 240, 50, 24 },
-        { 280.0f, 0.005f, 50.0f, 0.4f, 0.010f, 28.0f, 0.8f, 100, 220, 180, 40, 36 },
-        { 305.0f, 0.008f, 34.0f, 0.9f, 0.016f, 16.0f, 1.4f, 130, 150, 255, 30, 44 }
+        { 250.0f, 0.007f, 38.0f, 0.7f, 0.014f, 20.0f, 1.1f, tc->w1_r, tc->w1_g, tc->w1_b, 55, 24 },
+        { 280.0f, 0.005f, 50.0f, 0.4f, 0.010f, 28.0f, 0.8f, tc->w2_r, tc->w2_g, tc->w2_b, 45, 36 },
+        { 305.0f, 0.008f, 34.0f, 0.9f, 0.016f, 16.0f, 1.4f, tc->w3_r, tc->w3_g, tc->w3_b, 35, 44 }
     };
 
     for (int w = 0; w < 3; w++) {
@@ -315,7 +363,7 @@ static void render_ps3_wave(void) {
         }
 
         SDL_Rect p_rect = { (int)particles[i].x, (int)particles[i].y, (int)particles[i].size, (int)particles[i].size };
-        SDL_SetRenderDrawColor(renderer, 210, 240, 255, (Uint8)particles[i].alpha);
+        SDL_SetRenderDrawColor(renderer, tc->p_r, tc->p_g, tc->p_b, (Uint8)particles[i].alpha);
         SDL_RenderFillRect(renderer, &p_rect);
     }
 }

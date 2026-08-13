@@ -6,11 +6,12 @@
 #include <hal/xbox.h>
 
 // Static storage for hierarchical nodes
+static XMBNode settings_theme_children[5];
 static XMBNode settings_sysinfo_children[5];
 static XMBNode settings_video_children[4];
 static XMBNode settings_audio_children[3];
 static XMBNode settings_network_children[3];
-static XMBNode settings_root_children[4];
+static XMBNode settings_root_children[5];
 
 static XMBNode apps_utils_children[3];
 static XMBNode apps_storage_children[3];
@@ -25,6 +26,27 @@ void menu_tree_init(XMBNode* root_categories, int max_games) {
     // 1. SETTINGS CATEGORY TREE
     // ==========================================
     
+    // Theme Customization Submenu
+    strncpy(settings_theme_children[0].title, "Cycle Wave Theme", 64);
+    strncpy(settings_theme_children[0].subtitle, "PS3 Obsidian / Xbox Green / Blue / Ruby", 64);
+    settings_theme_children[0].type = NODE_TYPE_THEME_CYCLE;
+
+    strncpy(settings_theme_children[1].title, "Theme: Xbox Emerald", 64);
+    strncpy(settings_theme_children[1].subtitle, "Signature Xbox Green & Jade Wave", 64);
+    settings_theme_children[1].type = NODE_TYPE_ACTION;
+
+    strncpy(settings_theme_children[2].title, "Theme: PS3 Obsidian", 64);
+    strncpy(settings_theme_children[2].subtitle, "Smoked Charcoal & Ice Blue Wave", 64);
+    settings_theme_children[2].type = NODE_TYPE_ACTION;
+
+    strncpy(settings_theme_children[3].title, "Theme: Cobalt Sapphire", 64);
+    strncpy(settings_theme_children[3].subtitle, "Electric Ocean Blue Wave", 64);
+    settings_theme_children[3].type = NODE_TYPE_ACTION;
+
+    strncpy(settings_theme_children[4].title, "Theme: Ruby Crimson", 64);
+    strncpy(settings_theme_children[4].subtitle, "Warm Scarlet & Amber Wave", 64);
+    settings_theme_children[4].type = NODE_TYPE_ACTION;
+
     // System Information
     strncpy(settings_sysinfo_children[0].title, "Console Hardware", 64);
     strncpy(settings_sysinfo_children[0].subtitle, "Original Xbox (x86 Coppermine 733MHz)", 64);
@@ -90,32 +112,38 @@ void menu_tree_init(XMBNode* root_categories, int max_games) {
     settings_network_children[2].type = NODE_TYPE_INFO;
 
     // Settings Root Menu
-    strncpy(settings_root_children[0].title, "System Information", 64);
-    strncpy(settings_root_children[0].subtitle, "Kernel, Memory, Hardware specs", 64);
+    strncpy(settings_root_children[0].title, "Theme Settings", 64);
+    strncpy(settings_root_children[0].subtitle, "PS3 Wave & Accent Color Palettes", 64);
     settings_root_children[0].type = NODE_TYPE_SUBMENU;
-    settings_root_children[0].children = settings_sysinfo_children;
+    settings_root_children[0].children = settings_theme_children;
     settings_root_children[0].child_count = 5;
 
-    strncpy(settings_root_children[1].title, "Display Settings", 64);
-    strncpy(settings_root_children[1].subtitle, "Resolution, Widescreen 16:9", 64);
+    strncpy(settings_root_children[1].title, "System Information", 64);
+    strncpy(settings_root_children[1].subtitle, "Kernel, Memory, Hardware specs", 64);
     settings_root_children[1].type = NODE_TYPE_SUBMENU;
-    settings_root_children[1].children = settings_video_children;
-    settings_root_children[1].child_count = 4;
+    settings_root_children[1].children = settings_sysinfo_children;
+    settings_root_children[1].child_count = 5;
 
-    strncpy(settings_root_children[2].title, "Audio Settings", 64);
-    strncpy(settings_root_children[2].subtitle, "Dolby Digital 5.1 & UI sounds", 64);
+    strncpy(settings_root_children[2].title, "Display Settings", 64);
+    strncpy(settings_root_children[2].subtitle, "Resolution, Widescreen 16:9", 64);
     settings_root_children[2].type = NODE_TYPE_SUBMENU;
-    settings_root_children[2].children = settings_audio_children;
-    settings_root_children[2].child_count = 3;
+    settings_root_children[2].children = settings_video_children;
+    settings_root_children[2].child_count = 4;
 
-    strncpy(settings_root_children[3].title, "Network Settings", 64);
-    strncpy(settings_root_children[3].subtitle, "Ethernet, IP address, Gateway", 64);
+    strncpy(settings_root_children[3].title, "Audio Settings", 64);
+    strncpy(settings_root_children[3].subtitle, "Dolby Digital 5.1 & UI sounds", 64);
     settings_root_children[3].type = NODE_TYPE_SUBMENU;
-    settings_root_children[3].children = settings_network_children;
+    settings_root_children[3].children = settings_audio_children;
     settings_root_children[3].child_count = 3;
 
+    strncpy(settings_root_children[4].title, "Network Settings", 64);
+    strncpy(settings_root_children[4].subtitle, "Ethernet, IP address, Gateway", 64);
+    settings_root_children[4].type = NODE_TYPE_SUBMENU;
+    settings_root_children[4].children = settings_network_children;
+    settings_root_children[4].child_count = 3;
+
     root_categories[CATEGORY_SETTINGS].children = settings_root_children;
-    root_categories[CATEGORY_SETTINGS].child_count = 4;
+    root_categories[CATEGORY_SETTINGS].child_count = 5;
 
     // ==========================================
     // 2. APPS CATEGORY TREE

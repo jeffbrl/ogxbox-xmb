@@ -102,9 +102,22 @@ int main(void) {
                     SDL_Delay(90);
                     xbe_launcher_launch(selected_node->path);
                     running = 0;
+                } else if (selected_node->type == NODE_TYPE_THEME_CYCLE) {
+                    audio_play_sfx(SFX_SELECT);
+                    XMBTheme next_theme = (ui_get_theme() + 1) % THEME_COUNT;
+                    ui_set_theme(next_theme);
+                    snprintf(selected_node->subtitle, 64, "Active: %s", ui_get_theme_name(next_theme));
                 } else if (selected_node->type == NODE_TYPE_ACTION) {
                     audio_play_sfx(SFX_SELECT);
-                    if (strcmp(selected_node->title, "Reboot Console") == 0) {
+                    if (strcmp(selected_node->title, "Theme: Xbox Emerald") == 0) {
+                        ui_set_theme(THEME_XBOX_EMERALD);
+                    } else if (strcmp(selected_node->title, "Theme: PS3 Obsidian") == 0) {
+                        ui_set_theme(THEME_PS3_OBSIDIAN);
+                    } else if (strcmp(selected_node->title, "Theme: Cobalt Sapphire") == 0) {
+                        ui_set_theme(THEME_COBALT_BLUE);
+                    } else if (strcmp(selected_node->title, "Theme: Ruby Crimson") == 0) {
+                        ui_set_theme(THEME_RUBY_CRIMSON);
+                    } else if (strcmp(selected_node->title, "Reboot Console") == 0) {
                         HalReturnToFirmware(HalRebootRoutine);
                     } else if (strcmp(selected_node->title, "Power Off") == 0) {
                         HalReturnToFirmware(HalHaltRoutine);
