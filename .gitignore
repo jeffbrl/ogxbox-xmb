@@ -17,3 +17,4 @@ hdd_zip/
 # User payloads & SDK
 Games/
 nxdk/
+*.d
