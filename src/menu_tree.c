@@ -125,8 +125,8 @@ void menu_tree_init(XMBNode* root_categories, int max_games) {
     apps_utils_children[1].type = NODE_TYPE_ACTION;
 
     strncpy(apps_utils_children[2].title, "Launch MS Dashboard", 64);
-    strncpy(apps_utils_children[2].subtitle, "C:\\xboxdash.xbe", 64);
-    strncpy(apps_utils_children[2].path, "C:\\xboxdash.xbe", 256);
+    strncpy(apps_utils_children[2].subtitle, "C:\\msxboxdash.xbe", 64);
+    strncpy(apps_utils_children[2].path, "C:\\msxboxdash.xbe", 256);
     apps_utils_children[2].type = NODE_TYPE_LAUNCH;
 
     strncpy(apps_root_children[0].title, "System Utilities", 64);
