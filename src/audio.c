@@ -6,118 +6,134 @@
 #include <string.h>
 
 #define SAMPLE_RATE 48000
-#define BUFFER_SAMPLES 1024 // 1024 samples = ~21.3ms at 48kHz
+#define BUFFER_SAMPLES 1024
 #define NUM_DMA_BUFFERS 4
 #define PI 3.14159265358979323846f
 
+// Static double-buffered DMA pages locked in RAM
 static short dma_buffers[NUM_DMA_BUFFERS][BUFFER_SAMPLES * 2] __attribute__((aligned(128)));
 static int current_dma_buf = 0;
 
-static volatile SoundEffect current_sfx = SFX_NONE;
-static volatile int sfx_sample_idx = 0;
-static volatile int sfx_total_samples = 0;
+// Precomputed integer PCM Wave Tables (Interleaved Stereo)
+#define SFX_TICK_LEN 960
+#define SFX_CAT_LEN 2880
+#define SFX_SELECT_LEN 8160
+#define SFX_BACK_LEN 6240
 
-static void synthesize_samples(short* buffer, int samples) {
-    memset(buffer, 0, samples * 2 * sizeof(short));
+static short pcm_tick[SFX_TICK_LEN * 2];
+static short pcm_cat[SFX_CAT_LEN * 2];
+static short pcm_select[SFX_SELECT_LEN * 2];
+static short pcm_back[SFX_BACK_LEN * 2];
 
-    if (current_sfx == SFX_NONE) {
-        return;
+static const short* volatile active_sfx_ptr = NULL;
+static volatile int active_sfx_len = 0;
+static volatile int active_sfx_pos = 0;
+
+static void precompute_tables(void) {
+    // 1. Tick (Click)
+    for (int i = 0; i < SFX_TICK_LEN; i++) {
+        float t = (float)i / (float)SAMPLE_RATE;
+        float dur = 0.020f;
+        float env = (1.0f - t / dur) * (1.0f - t / dur);
+        float freq = 2800.0f - (t / dur) * 1600.0f;
+        short s = (short)(sinf(2.0f * PI * freq * t) * env * 28000.0f);
+        pcm_tick[i * 2] = s;
+        pcm_tick[i * 2 + 1] = s;
     }
 
-    for (int i = 0; i < samples; i++) {
-        if (sfx_sample_idx >= sfx_total_samples) {
-            current_sfx = SFX_NONE;
-            break;
-        }
-
-        float t = (float)sfx_sample_idx / (float)SAMPLE_RATE;
-        short val = 0;
-
-        if (current_sfx == SFX_TICK) {
-            // Crisp tactile tick (18ms)
-            float dur = 0.018f;
-            if (t < dur) {
-                float env = (1.0f - t / dur) * (1.0f - t / dur);
-                float freq = 2800.0f - (t / dur) * 1600.0f;
-                val = (short)(sinf(2.0f * PI * freq * t) * env * 24000.0f);
-            }
-        } else if (current_sfx == SFX_CATEGORY) {
-            // Smooth horizontal glide (60ms)
-            float dur = 0.060f;
-            if (t < dur) {
-                float env = sinf((t / dur) * PI);
-                float freq = 600.0f + sinf((t / dur) * PI) * 500.0f;
-                val = (short)(sinf(2.0f * PI * freq * t) * env * 20000.0f);
-            }
-        } else if (current_sfx == SFX_SELECT) {
-            // Bright harmonic two-tone chime (170ms: C6 1046Hz -> E6 1318Hz)
-            float dur = 0.170f;
-            if (t < dur) {
-                float env = 1.0f - (t / dur);
-                float freq = (t < 0.08f) ? 1046.5f : 1318.5f;
-                val = (short)(sinf(2.0f * PI * freq * t) * env * 26000.0f);
-            }
-        } else if (current_sfx == SFX_BACK) {
-            // Warm descending tone (130ms: A5 880Hz -> D5 587Hz)
-            float dur = 0.130f;
-            if (t < dur) {
-                float env = 1.0f - (t / dur);
-                float freq = 880.0f - (t / dur) * 320.0f;
-                val = (short)(sinf(2.0f * PI * freq * t) * env * 22000.0f);
-            }
-        }
-
-        buffer[i * 2] = val;     // Left Channel
-        buffer[i * 2 + 1] = val; // Right Channel
-        sfx_sample_idx++;
+    // 2. Category (Swoosh)
+    for (int i = 0; i < SFX_CAT_LEN; i++) {
+        float t = (float)i / (float)SAMPLE_RATE;
+        float dur = 0.060f;
+        float env = sinf((t / dur) * PI);
+        float freq = 550.0f + sinf((t / dur) * PI) * 550.0f;
+        short s = (short)(sinf(2.0f * PI * freq * t) * env * 24000.0f);
+        pcm_cat[i * 2] = s;
+        pcm_cat[i * 2 + 1] = s;
     }
+
+    // 3. Select (Chime C6 -> E6)
+    for (int i = 0; i < SFX_SELECT_LEN; i++) {
+        float t = (float)i / (float)SAMPLE_RATE;
+        float dur = 0.170f;
+        float env = 1.0f - (t / dur);
+        float freq = (t < 0.08f) ? 1046.5f : 1318.5f;
+        short s = (short)(sinf(2.0f * PI * freq * t) * env * 28000.0f);
+        pcm_select[i * 2] = s;
+        pcm_select[i * 2 + 1] = s;
+    }
+
+    // 4. Back (Tone A5 -> D5)
+    for (int i = 0; i < SFX_BACK_LEN; i++) {
+        float t = (float)i / (float)SAMPLE_RATE;
+        float dur = 0.130f;
+        float env = 1.0f - (t / dur);
+        float freq = 880.0f - (t / dur) * 320.0f;
+        short s = (short)(sinf(2.0f * PI * freq * t) * env * 26000.0f);
+        pcm_back[i * 2] = s;
+        pcm_back[i * 2 + 1] = s;
+    }
+}
+
+static void feed_next_buffer(void) {
+    short* dst = dma_buffers[current_dma_buf];
+
+    // Zero-FPU pure integer memory copy/mix
+    for (int i = 0; i < BUFFER_SAMPLES; i++) {
+        short sample = 0;
+        if (active_sfx_ptr != NULL && active_sfx_pos < active_sfx_len) {
+            sample = active_sfx_ptr[active_sfx_pos * 2];
+            active_sfx_pos++;
+            if (active_sfx_pos >= active_sfx_len) {
+                active_sfx_ptr = NULL;
+            }
+        }
+        dst[i * 2]     = sample;
+        dst[i * 2 + 1] = sample;
+    }
+
+    XAudioProvideSamples((unsigned char*)dst, BUFFER_SAMPLES * 2 * sizeof(short), 0);
+    current_dma_buf = (current_dma_buf + 1) % NUM_DMA_BUFFERS;
 }
 
 static void native_audio_callback(void* pac97Device, void* data) {
     (void)pac97Device;
     (void)data;
-
-    short* target = dma_buffers[current_dma_buf];
-    synthesize_samples(target, BUFFER_SAMPLES);
-
-    XAudioProvideSamples((unsigned char*)target, BUFFER_SAMPLES * 2 * sizeof(short), 0);
-    current_dma_buf = (current_dma_buf + 1) % NUM_DMA_BUFFERS;
+    feed_next_buffer();
 }
 
 int audio_init(void) {
-    // Lock DMA buffer memory pages so physical addresses remain static
+    precompute_tables();
+
     MmLockUnlockBufferPages((PVOID)dma_buffers, sizeof(dma_buffers), FALSE);
 
-    // Initialise native Xbox AC97 hardware driver
     XAudioInit(16, 2, native_audio_callback, NULL);
 
-    // Pre-feed silent initial DMA buffers to prime the ring descriptors
     for (int i = 0; i < NUM_DMA_BUFFERS; i++) {
-        memset(dma_buffers[i], 0, sizeof(dma_buffers[i]));
-        XAudioProvideSamples((unsigned char*)dma_buffers[i], BUFFER_SAMPLES * 2 * sizeof(short), 0);
+        feed_next_buffer();
     }
-    current_dma_buf = 0;
 
-    // Start hardware playback
     XAudioPlay();
     return 0;
 }
 
 void audio_play_sfx(SoundEffect sfx) {
-    if (sfx == SFX_NONE) return;
-
-    current_sfx = sfx;
-    sfx_sample_idx = 0;
     if (sfx == SFX_TICK) {
-        sfx_total_samples = (int)(0.025f * SAMPLE_RATE);
+        active_sfx_ptr = pcm_tick;
+        active_sfx_len = SFX_TICK_LEN;
+        active_sfx_pos = 0;
     } else if (sfx == SFX_CATEGORY) {
-        sfx_total_samples = (int)(0.070f * SAMPLE_RATE);
+        active_sfx_ptr = pcm_cat;
+        active_sfx_len = SFX_CAT_LEN;
+        active_sfx_pos = 0;
     } else if (sfx == SFX_SELECT) {
-        sfx_total_samples = (int)(0.180f * SAMPLE_RATE);
+        active_sfx_ptr = pcm_select;
+        active_sfx_len = SFX_SELECT_LEN;
+        active_sfx_pos = 0;
     } else if (sfx == SFX_BACK) {
-        sfx_total_samples = (int)(0.140f * SAMPLE_RATE);
-    } else {
-        sfx_total_samples = 0;
+        active_sfx_ptr = pcm_back;
+        active_sfx_len = SFX_BACK_LEN;
+        active_sfx_pos = 0;
     }
 }
 
