@@ -3,8 +3,8 @@
 #include <SDL.h>
 #include <SDL_ttf.h>
 #include <hal/debug.h>
+#include <windows.h>
 #include <math.h>
-#include <time.h>
 #include <stdlib.h>
 
 #define STB_IMAGE_IMPLEMENTATION
@@ -376,21 +376,24 @@ static void render_hud(void) {
     SDL_SetRenderDrawColor(renderer, 255, 255, 255, 25);
     SDL_RenderDrawLine(renderer, 40, 52, WINDOW_WIDTH - 40, 52);
 
-    // Clock
-    time_t rawtime;
-    struct tm* timeinfo;
-    time(&rawtime);
-    timeinfo = localtime(&rawtime);
+    // Live Hardware Real-Time Clock (RTC)
+    SYSTEMTIME st;
+    GetLocalTime(&st);
 
     char time_str[64];
-    if (timeinfo && timeinfo->tm_year > 70) {
-        strftime(time_str, sizeof(time_str), "%I:%M %p", timeinfo);
-    } else {
-        snprintf(time_str, sizeof(time_str), "12:00 PM");
-    }
+    int hour12 = st.wHour % 12;
+    if (hour12 == 0) hour12 = 12;
+    const char* ampm = (st.wHour >= 12) ? "PM" : "AM";
+
+    snprintf(time_str, sizeof(time_str), "%d/%d  %d:%02d %s",
+        st.wMonth ? st.wMonth : 1,
+        st.wDay ? st.wDay : 1,
+        hour12,
+        st.wMinute,
+        ampm);
 
     SDL_Color hud_color = { 230, 240, 255, 255 };
-    render_text_shadow(font_small, time_str, WINDOW_WIDTH - 115, 24, hud_color, 210);
+    render_text_shadow(font_small, time_str, WINDOW_WIDTH - 150, 24, hud_color, 210);
 
     // Dashboard Branding
     render_text_shadow(font_small, "Xbox XMB", 45, 24, hud_color, 160);
