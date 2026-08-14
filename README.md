@@ -1,6 +1,6 @@
 # OGX-XMB: Cross Media Bar Dashboard for Original Xbox
 
-A sleek, minimalist, high-performance custom dashboard for the Original Xbox, inspired by Sony's Cross Media Bar (XMB) interface. Built natively with the open-source **[nxdk](https://github.com/XboxDev/nxdk)** SDK and SDL2, **OGX-XMB** delivers a modern, lightweight, 60 FPS launcher experience with fluid animations, real-time system diagnostics, and instant game launching.
+A sleek, minimalist, high-performance custom dashboard for the ogxbox, inspired by Sony's Cross Media Bar (XMB) interface. Built natively with the open-source **[nxdk](https://github.com/XboxDev/nxdk)** SDK and SDL2, **OGX-XMB** delivers a modern, lightweight, 60 FPS launcher experience with fluid animations, real-time system diagnostics, and instant game launching.
 
 ---
 
@@ -65,7 +65,7 @@ All user-adjustable dashboard and hardware settings grouped into a clean setting
 
 ## ⚡ Cerbios BIOS Customization & `cerbios.ini` Injection
 
-OGX-XMB provides built-in support for **Cerbios** (both v2.x and v3.x+). You can define and customize your console's BIOS behavior directly from the repository root using [`cerbios.ini`](file:///home/jeffl/development/ogx-xmb/cerbios.ini).
+OGX-XMB provides built-in support for **Cerbios** (both v2.x and v3.x+). You can define and customize your console's BIOS behavior directly from the repository root using `cerbios.ini`.
 
 ### 1. How It Works
 When you build the hard drive image using `./scripts/build_hdd.sh`, the script automatically:
