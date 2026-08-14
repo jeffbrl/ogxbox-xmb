@@ -1,77 +1,78 @@
 #include "audio.h"
 #include <SDL.h>
 #include <math.h>
+#include <string.h>
 #include <hal/debug.h>
 
-#define SAMPLE_RATE 44100
+#define SAMPLE_RATE 48000
 #define PI 3.14159265358979323846f
 
-static SoundEffect current_sfx = SFX_NONE;
-static int sfx_sample_idx = 0;
-static int sfx_total_samples = 0;
+static volatile SoundEffect current_sfx = SFX_NONE;
+static volatile int sfx_sample_idx = 0;
+static volatile int sfx_total_samples = 0;
+static int audio_opened = 0;
 
 static void audio_callback(void* userdata, Uint8* stream, int len) {
     (void)userdata;
+    memset(stream, 0, len);
+
+    if (current_sfx == SFX_NONE) {
+        return;
+    }
+
     Sint16* buffer = (Sint16*)stream;
-    int samples = len / (sizeof(Sint16) * 2); // stereo
+    int num_samples = len / (int)(sizeof(Sint16) * 2); // 16-bit stereo
 
-    for (int i = 0; i < samples; i++) {
+    for (int i = 0; i < num_samples; i++) {
+        if (sfx_sample_idx >= sfx_total_samples) {
+            current_sfx = SFX_NONE;
+            break;
+        }
+
+        float t = (float)sfx_sample_idx / (float)SAMPLE_RATE;
         Sint16 val = 0;
-        if (current_sfx != SFX_NONE && sfx_sample_idx < sfx_total_samples) {
-            float t = (float)sfx_sample_idx / (float)SAMPLE_RATE;
-            float env = 0.0f;
-            float freq = 0.0f;
 
-            if (current_sfx == SFX_TICK) {
-                // Short crisp click (15ms)
-                float dur = 0.015f;
-                if (t < dur) {
-                    env = (1.0f - t / dur) * (1.0f - t / dur);
-                    freq = 2400.0f - (t / dur) * 1000.0f;
-                    val = (Sint16)(sinf(2.0f * PI * freq * t) * env * 14000.0f);
-                }
-            } else if (current_sfx == SFX_CATEGORY) {
-                // Soft horizontal glide swoosh (65ms)
-                float dur = 0.065f;
-                if (t < dur) {
-                    env = sinf((t / dur) * PI);
-                    freq = 650.0f + sinf((t / dur) * PI) * 400.0f;
-                    val = (Sint16)(sinf(2.0f * PI * freq * t) * env * 12000.0f);
-                }
-            } else if (current_sfx == SFX_SELECT) {
-                // Melodic two-tone chime (160ms)
-                float dur = 0.160f;
-                if (t < dur) {
-                    env = 1.0f - (t / dur);
-                    float f1 = (t < 0.08f) ? 1046.5f : 1318.5f; // C6 to E6
-                    val = (Sint16)(sinf(2.0f * PI * f1 * t) * env * 18000.0f);
-                }
-            } else if (current_sfx == SFX_BACK) {
-                // Soft downward tone (120ms)
-                float dur = 0.120f;
-                if (t < dur) {
-                    env = 1.0f - (t / dur);
-                    freq = 880.0f - (t / dur) * 350.0f;
-                    val = (Sint16)(sinf(2.0f * PI * freq * t) * env * 15000.0f);
-                }
+        if (current_sfx == SFX_TICK) {
+            // Tactile 18ms click pulse
+            float dur = 0.018f;
+            if (t < dur) {
+                float env = (1.0f - t / dur) * (1.0f - t / dur);
+                float freq = 2600.0f - (t / dur) * 1400.0f;
+                val = (Sint16)(sinf(2.0f * PI * freq * t) * env * 22000.0f);
             }
-
-            sfx_sample_idx++;
-            if (sfx_sample_idx >= sfx_total_samples) {
-                current_sfx = SFX_NONE;
+        } else if (current_sfx == SFX_CATEGORY) {
+            // Smooth horizontal glide (60ms)
+            float dur = 0.060f;
+            if (t < dur) {
+                float env = sinf((t / dur) * PI);
+                float freq = 550.0f + sinf((t / dur) * PI) * 500.0f;
+                val = (Sint16)(sinf(2.0f * PI * freq * t) * env * 18000.0f);
+            }
+        } else if (current_sfx == SFX_SELECT) {
+            // Crisp two-tone chime (170ms: C6 1046Hz -> E6 1318Hz)
+            float dur = 0.170f;
+            if (t < dur) {
+                float env = 1.0f - (t / dur);
+                float freq = (t < 0.075f) ? 1046.5f : 1318.5f;
+                val = (Sint16)(sinf(2.0f * PI * freq * t) * env * 24000.0f);
+            }
+        } else if (current_sfx == SFX_BACK) {
+            // Warm descending tone (130ms: A5 880Hz -> D5 587Hz)
+            float dur = 0.130f;
+            if (t < dur) {
+                float env = 1.0f - (t / dur);
+                float freq = 880.0f - (t / dur) * 320.0f;
+                val = (Sint16)(sinf(2.0f * PI * freq * t) * env * 20000.0f);
             }
         }
+
         buffer[i * 2] = val;     // Left
         buffer[i * 2 + 1] = val; // Right
+        sfx_sample_idx++;
     }
 }
 
 int audio_init(void) {
-    if (SDL_InitSubSystem(SDL_INIT_AUDIO) < 0) {
-        debugPrint("SDL Audio init failed: %s\n", SDL_GetError());
-        return -1;
-    }
-
     SDL_AudioSpec wanted, obtained;
     SDL_zero(wanted);
     wanted.freq = SAMPLE_RATE;
@@ -81,26 +82,33 @@ int audio_init(void) {
     wanted.callback = audio_callback;
 
     if (SDL_OpenAudio(&wanted, &obtained) < 0) {
-        debugPrint("Failed to open audio: %s\n", SDL_GetError());
+        debugPrint("SDL_OpenAudio failed: %s\n", SDL_GetError());
+        audio_opened = 0;
         return -1;
     }
 
-    SDL_PauseAudio(0); // Start audio playback
+    debugPrint("Audio initialized: %d Hz, %d channels, buffer %d\n",
+        obtained.freq, obtained.channels, obtained.samples);
+
+    SDL_PauseAudio(0); // Unpause audio device
+    audio_opened = 1;
     return 0;
 }
 
 void audio_play_sfx(SoundEffect sfx) {
+    if (!audio_opened || sfx == SFX_NONE) return;
+
     SDL_LockAudio();
     current_sfx = sfx;
     sfx_sample_idx = 0;
     if (sfx == SFX_TICK) {
-        sfx_total_samples = (int)(0.020f * SAMPLE_RATE);
+        sfx_total_samples = (int)(0.025f * SAMPLE_RATE);
     } else if (sfx == SFX_CATEGORY) {
         sfx_total_samples = (int)(0.070f * SAMPLE_RATE);
     } else if (sfx == SFX_SELECT) {
-        sfx_total_samples = (int)(0.170f * SAMPLE_RATE);
+        sfx_total_samples = (int)(0.180f * SAMPLE_RATE);
     } else if (sfx == SFX_BACK) {
-        sfx_total_samples = (int)(0.130f * SAMPLE_RATE);
+        sfx_total_samples = (int)(0.140f * SAMPLE_RATE);
     } else {
         sfx_total_samples = 0;
     }
@@ -108,6 +116,8 @@ void audio_play_sfx(SoundEffect sfx) {
 }
 
 void audio_cleanup(void) {
-    SDL_CloseAudio();
-    SDL_QuitSubSystem(SDL_INIT_AUDIO);
+    if (audio_opened) {
+        SDL_CloseAudio();
+        audio_opened = 0;
+    }
 }
