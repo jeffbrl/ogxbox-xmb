@@ -95,7 +95,8 @@ c.zip
 ├── msxboxdash.xbe        # [User-Provided] Stock Microsoft Dashboard 5960
 ├── Xbox.xtf              # [User-Provided] Stock font
 ├── XBox Book.xtf         # [User-Provided] Stock font
-├── ind-bios.cfg          # [Optional] BIOS configuration file
+├── ind-bios.cfg          # [Optional] Ind-BIOS configuration file
+├── cerbios.ini           # [Optional] Cerbios BIOS configuration file
 ├── assets/               # OGX-XMB UI assets
 │   ├── fonts/
 │   │   └── Roboto-Regular.ttf
