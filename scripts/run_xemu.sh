@@ -1,14 +1,19 @@
 #!/bin/bash
 set -e
 
-# Note: xemu settings already point to HDD image generate by this repo
-# to avoid an expensive copy of very large image
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$DIR"
 
-# Build dashboard and rebuild HDD image with injected configs
-./scripts/build_hdd.sh
+# 1. Build the dashboard binary with nxdk
+PATH=$PATH:$DIR/nxdk/bin make
 
-sudo chown jeffl:jeffl xbox_hdd.qcow2
+# 2. If the HDD image does not exist, build it once
+if [ ! -f "xbox_hdd.qcow2" ]; then
+    echo "==> xbox_hdd.qcow2 not found. Generating initial image..."
+    ./scripts/build_hdd.sh
+fi
+
 XEMU='distrobox-host-exec flatpak run app.xemu.xemu'
 
-# Deploy generated HDD image to xemu's configured path
+# 3. Launch xemu instantly
 $XEMU
