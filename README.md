@@ -63,6 +63,63 @@ All user-adjustable dashboard and hardware settings grouped into a clean setting
 
 ---
 
+## ⚡ Cerbios BIOS Customization & `cerbios.ini` Injection
+
+OGX-XMB provides built-in support for **Cerbios** (both v2.x and v3.x+). You can define and customize your console's BIOS behavior directly from the repository root using [`cerbios.ini`](file:///home/jeffl/development/ogx-xmb/cerbios.ini).
+
+### 1. How It Works
+When you build the hard drive image using `./scripts/build_hdd.sh`, the script automatically:
+1. Converts the root `cerbios.ini` to standard DOS/Windows **CRLF (`\r\n`)** line endings expected by the Cerbios BIOS parser.
+2. Injects the configuration into all locations recognized by Cerbios:
+   * `C:\cerbios.ini` (Legacy / standard location)
+   * `C:\Cerbios\cerbios.ini` (Subfolder fallback)
+   * `E:\Cerbios\cerbios.ini` (Primary location for Cerbios v3.0+)
+
+### 2. Customizing `cerbios.ini`
+Edit `cerbios.ini` in the project root to adjust boot paths and hardware options:
+
+```ini
+; ==============================================================================
+; Cerbios Configuration File (cerbios.ini)
+; ==============================================================================
+
+[Dash]
+; Dashboard Boot Priority (1 to 5)
+DashPath1 = C:\evoxdash.xbe
+DashPath2 = C:\default.xbe
+DashPath3 = E:\evoxdash.xbe
+DashPath4 = E:\default.xbe
+DashPath5 = C:\xboxdash.xbe
+
+[General]
+; Enable/Disable custom boot animation (0 = Off, 1 = On)
+CustomBootAnimation = 1
+
+[Video]
+; Force Video Modes (0 = Off / Auto, 1 = On)
+ForceProgressive = 0
+Force480p = 0
+Force720p = 0
+ForceWidescreen = 0
+
+[Fan]
+; Custom Fan Speed percentage (20 to 100)
+FanSpeed = 20
+
+[Audio]
+; Play Cerbios Startup Sound (0 = Off, 1 = On)
+PlayBootSound = 1
+```
+
+### 3. Deploying Changes
+After modifying `cerbios.ini`:
+```bash
+./scripts/build_hdd.sh
+```
+This re-injects the configuration across partitions and regenerates `xbox_hdd.qcow2` with user-level permissions.
+
+---
+
 ## ⚖️ Clean-Room Policy & Copyright Notice
 
 **OGX-XMB is 100% open-source and free of proprietary, copyrighted Microsoft assets.**
@@ -117,6 +174,8 @@ c.zip
 
 ```text
 e.zip
+├── Cerbios/
+│   └── cerbios.ini       # Cerbios v3.x boot configuration
 ├── Games/                # Game directories (e.g., Games/Halo/default.xbe)
 └── Apps/                 # Homebrew utilities and standalone apps
 ```
@@ -139,11 +198,17 @@ PATH=$PATH:$NXDK_DIR/bin make
 ```
 The compiled Xbox executable will be produced at `bin/default.xbe`.
 
-### 2. Launch in Xemu
-To build the disk image and launch automatically in `xemu`:
+### 2. Launch in Xemu (Fast Development Workflow)
 ```bash
 ./scripts/run_xemu.sh
 ```
+* Compiles the dashboard with `make` and launches `xemu` instantly (< 1s).
+
+### 3. Full HDD Image Rebuild
+```bash
+./scripts/build_hdd.sh
+```
+* Rebuilds `xbox_hdd.qcow2` with updated partitions, injected `cerbios.ini`, and custom games/apps.
 
 ---
 
