@@ -35,9 +35,9 @@ int main(void) {
     audio_init();
     input_init();
 
-    // Initialize Root Menu Tree and Scanned Game Nodes
+    // Initialize Root Menu Tree and Scanned Game Nodes (Xemu 128MB budget)
     static XMBNode root_categories[CATEGORY_COUNT];
-    menu_tree_init(root_categories, 64);
+    menu_tree_init(root_categories, MAX_GAMES);
 
     XMBCategory current_category = CATEGORY_GAMES;
     XMBNavContext nav_ctx = { .depth = 0 };
@@ -124,11 +124,11 @@ int main(void) {
                         HalWriteSMBusValue(0x20, 0x02, FALSE, 0x01);
                         HalReturnToFirmware(HalQuickRebootRoutine);
                         HalReturnToFirmware(HalRebootRoutine);
-                    } else if (strcmp(selected_node->title, "Power Off") == 0) {
+                    } else if (strcmp(selected_node->title, "Exit to Desktop") == 0 || strcmp(selected_node->title, "Power Off") == 0) {
                         input_cleanup();
                         ui_cleanup();
                         SDL_Quit();
-                        HalWriteSMBusValue(0x20, 0x02, FALSE, 0x80); // 0x80 = Power Off
+                        HalWriteSMBusValue(0x20, 0x02, FALSE, 0x80); // 0x80 = Power Off (Terminates Xemu cleanly)
                         HalReturnToFirmware(HalHaltRoutine);
                     }
                 } else {

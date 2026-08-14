@@ -1,5 +1,6 @@
 #include "menu_tree.h"
 #include "xbe_scanner.h"
+#include "xmb_config.h"
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -24,8 +25,8 @@ static XMBNode settings_root_children[4];
 static XMBNode apps_utils_children[3];
 static XMBNode apps_root_children[1];
 
-// Static storage for Games
-static XMBNode games_root_children[64];
+// Static storage for Games (expanded for Xemu 128MB memory budget)
+static XMBNode games_root_children[MAX_GAMES];
 
 void menu_tree_refresh_system_info(void) {
     // 1. Safe Dynamic System Memory Query via Kernel MM API
@@ -120,8 +121,8 @@ void menu_tree_init(XMBNode* root_categories, int max_games) {
     strncpy(apps_utils_children[0].subtitle, "Soft-reset Xbox system", 64);
     apps_utils_children[0].type = NODE_TYPE_ACTION;
 
-    strncpy(apps_utils_children[1].title, "Power Off", 64);
-    strncpy(apps_utils_children[1].subtitle, "Shutdown hardware", 64);
+    strncpy(apps_utils_children[1].title, "Exit to Desktop", 64);
+    strncpy(apps_utils_children[1].subtitle, "Quit Xemu and return to host", 64);
     apps_utils_children[1].type = NODE_TYPE_ACTION;
 
     strncpy(apps_utils_children[2].title, "Launch MS Dashboard", 64);
@@ -130,7 +131,7 @@ void menu_tree_init(XMBNode* root_categories, int max_games) {
     apps_utils_children[2].type = NODE_TYPE_LAUNCH;
 
     strncpy(apps_root_children[0].title, "System Utilities", 64);
-    strncpy(apps_root_children[0].subtitle, "Reboot, Power, Stock Dash", 64);
+    strncpy(apps_root_children[0].subtitle, "Reboot, Exit Xemu, Stock Dash", 64);
     apps_root_children[0].type = NODE_TYPE_SUBMENU;
     apps_root_children[0].children = apps_utils_children;
     apps_root_children[0].child_count = 3;
