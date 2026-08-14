@@ -137,9 +137,13 @@ int main(void) {
             }
         }
         
+        audio_update();
+
         const char* breadcrumb = (nav_ctx.depth > 0) ? nav_ctx.stack[nav_ctx.depth - 1]->title : NULL;
         ui_render(current_category, active_items, item_count, selected_indices[nav_ctx.depth], nav_ctx.depth, breadcrumb);
         
+        audio_update();
+
         SDL_Delay(16); // ~60fps
     }
     

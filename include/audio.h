@@ -11,6 +11,7 @@ typedef enum {
 
 int audio_init(void);
 void audio_play_sfx(SoundEffect sfx);
+void audio_update(void);
 void audio_cleanup(void);
 
 #endif // AUDIO_H

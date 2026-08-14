@@ -7,10 +7,12 @@
 
 #define SAMPLE_RATE 48000
 #define BUFFER_SAMPLES 1024
-#define NUM_DMA_BUFFERS 4
+#define NUM_DMA_BUFFERS 16
 #define PI 3.14159265358979323846f
 
-// Static double-buffered DMA pages locked in RAM
+extern AC97_DEVICE ac97Device;
+
+// Static double-buffered DMA pages locked in physical RAM
 static short dma_buffers[NUM_DMA_BUFFERS][BUFFER_SAMPLES * 2] __attribute__((aligned(128)));
 static int current_dma_buf = 0;
 
@@ -37,7 +39,7 @@ static void precompute_tables(void) {
         float env = (1.0f - t / dur) * (1.0f - t / dur);
         float freq = 2800.0f - (t / dur) * 1600.0f;
         short s = (short)(sinf(2.0f * PI * freq * t) * env * 28000.0f);
-        pcm_tick[i * 2] = s;
+        pcm_tick[i * 2]     = s;
         pcm_tick[i * 2 + 1] = s;
     }
 
@@ -48,7 +50,7 @@ static void precompute_tables(void) {
         float env = sinf((t / dur) * PI);
         float freq = 550.0f + sinf((t / dur) * PI) * 550.0f;
         short s = (short)(sinf(2.0f * PI * freq * t) * env * 24000.0f);
-        pcm_cat[i * 2] = s;
+        pcm_cat[i * 2]     = s;
         pcm_cat[i * 2 + 1] = s;
     }
 
@@ -59,7 +61,7 @@ static void precompute_tables(void) {
         float env = 1.0f - (t / dur);
         float freq = (t < 0.08f) ? 1046.5f : 1318.5f;
         short s = (short)(sinf(2.0f * PI * freq * t) * env * 28000.0f);
-        pcm_select[i * 2] = s;
+        pcm_select[i * 2]     = s;
         pcm_select[i * 2 + 1] = s;
     }
 
@@ -70,7 +72,7 @@ static void precompute_tables(void) {
         float env = 1.0f - (t / dur);
         float freq = 880.0f - (t / dur) * 320.0f;
         short s = (short)(sinf(2.0f * PI * freq * t) * env * 26000.0f);
-        pcm_back[i * 2] = s;
+        pcm_back[i * 2]     = s;
         pcm_back[i * 2 + 1] = s;
     }
 }
@@ -78,7 +80,7 @@ static void precompute_tables(void) {
 static void feed_next_buffer(void) {
     short* dst = dma_buffers[current_dma_buf];
 
-    // Zero-FPU pure integer memory copy/mix
+    // Mix samples or output silence
     for (int i = 0; i < BUFFER_SAMPLES; i++) {
         short sample = 0;
         if (active_sfx_ptr != NULL && active_sfx_pos < active_sfx_len) {
@@ -109,12 +111,36 @@ int audio_init(void) {
 
     XAudioInit(16, 2, native_audio_callback, NULL);
 
-    for (int i = 0; i < NUM_DMA_BUFFERS; i++) {
+    // Initial fill of 8 buffers ahead
+    for (int i = 0; i < 8; i++) {
         feed_next_buffer();
     }
 
     XAudioPlay();
     return 0;
+}
+
+void audio_update(void) {
+    if (!ac97Device.mmio) return;
+
+    volatile unsigned char* pb = (unsigned char*)ac97Device.mmio;
+    unsigned char civ = pb[0x114]; // Current Index Value being read by AC97 DMA
+
+    // Calculate how many descriptors are currently queued ahead of CIV
+    int queued = (ac97Device.nextDescriptor >= civ)
+               ? (ac97Device.nextDescriptor - civ)
+               : (32 + ac97Device.nextDescriptor - civ);
+
+    // Keep at least 6-8 buffers (~150ms) queued ahead at all times
+    while (queued < 8) {
+        feed_next_buffer();
+        queued++;
+    }
+
+    // Ensure DMA engine is running
+    if (!(pb[0x11B] & 1)) {
+        XAudioPlay();
+    }
 }
 
 void audio_play_sfx(SoundEffect sfx) {
