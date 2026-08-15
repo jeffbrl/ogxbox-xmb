@@ -1,6 +1,10 @@
 # OGX-XMB: Cross Media Bar Dashboard for Original Xbox
 
-A sleek, minimalist, high-performance custom dashboard for the ogxbox, inspired by Sony's Cross Media Bar (XMB) interface. Built natively with the open-source **[nxdk](https://github.com/XboxDev/nxdk)** SDK and SDL2, **OGX-XMB** delivers a modern, lightweight, 60 FPS launcher experience with fluid animations, real-time system diagnostics, and instant game launching.
+A sleek, minimalist, high-performance custom dashboard for the original Xbox, inspired by Sony's Cross Media Bar (XMB) interface. Built natively with the open-source **[nxdk](https://github.com/XboxDev/nxdk)** SDK and SDL2, **OGX-XMB** delivers a modern, lightweight, 60 FPS launcher experience with fluid animations, real-time system diagnostics, automatic background artwork scraping, and instant game launching.
+
+<p align="center">
+  <img src="xmb.png" alt="OGX-XMB Dashboard running on Original Xbox" width="700" />
+</p>
 
 ---
 
