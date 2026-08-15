@@ -2,8 +2,10 @@
 
 A sleek, minimalist, high-performance custom dashboard for the original Xbox, inspired by Sony's Cross Media Bar (XMB) interface. Built natively with the open-source **[nxdk](https://github.com/XboxDev/nxdk)** SDK and SDL2, **OGX-XMB** delivers a modern, lightweight, 60 FPS launcher experience with fluid animations, real-time system diagnostics, automatic background artwork scraping, and instant game launching.
 
+OGX-XMB is purpose-built to target the **[xemu](https://xemu.app)** original Xbox emulator, tailored with specific optimizations for virtualized environments. It features 128 MB RAM budget optimizations for snappy metadata caching, automated NAT networking with direct CDN streaming for zero-config box art scraping, smooth SDL controller handling with hotplugging and analog deadzones, and automated Cerbios/FATX hard drive image generation workflows (`./scripts/build_hdd.sh`) for instant, turnkey testing and daily emulator use.
+
 <p align="center">
-  <img src="xmb.png" alt="OGX-XMB Dashboard running on Original Xbox" width="700" />
+  <img src="xmb.png" alt="OGX-XMB Dashboard running in Xemu" width="700" />
 </p>
 
 ---
