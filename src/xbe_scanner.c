@@ -1,5 +1,6 @@
 #include "xbe_scanner.h"
 #include "xmb_config.h"
+#include "http_client.h"
 #include <string.h>
 #include <stdio.h>
 #include <windows.h>
@@ -111,7 +112,7 @@ int xbe_scanner_get_items(XMBCategory category, XMBItem* items, int max_items) {
                             strncpy(items[count].path, xbe_path, sizeof(items[count].path));
                             get_xbe_title(xbe_path, items[count].title, sizeof(items[count].title));
                             
-                            // Check for custom artwork/icon
+                            // Check for custom artwork/icon locally
                             items[count].icon_path[0] = '\0';
                             const char* art_names[] = { "icon.png", "boxart.png", "poster.png", "cover.png", "default.png" };
                             for (int a = 0; a < 5; a++) {
