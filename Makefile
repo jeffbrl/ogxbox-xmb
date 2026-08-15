@@ -6,6 +6,7 @@ export PATH := $(NXDK_DIR)/bin:$(PATH)
 
 # We want to use SDL2, which is provided by nxdk
 NXDK_SDL = y
+NXDK_NET = y
 CFLAGS += -I$(CURDIR)/include
 
 include $(NXDK_DIR)/Makefile

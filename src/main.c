@@ -12,6 +12,7 @@
 #include "input.h"
 #include "audio.h"
 #include "xbe_launcher.h"
+#include "http_client.h"
 
 int main(void) {
     XVideoSetMode(WINDOW_WIDTH, WINDOW_HEIGHT, 32, REFRESH_DEFAULT);
@@ -21,6 +22,9 @@ int main(void) {
     nxMountDrive('E', "\\Device\\Harddisk0\\Partition1\\");
     nxMountDrive('F', "\\Device\\Harddisk0\\Partition6\\");
     nxMountDrive('G', "\\Device\\Harddisk0\\Partition7\\");
+
+    // Initialize networking for on-console CDN artwork scraping
+    net_init();
 
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER) < 0) {
         debugPrint("Failed to initialize SDL: %s\n", SDL_GetError());
@@ -35,9 +39,15 @@ int main(void) {
     audio_init();
     input_init();
 
+    // Render initial loading frame immediately
+    ui_render(CATEGORY_GAMES, NULL, 0, 0, 0, NULL);
+
     // Initialize Root Menu Tree and Scanned Game Nodes (Xemu 128MB budget)
     static XMBNode root_categories[CATEGORY_COUNT];
     menu_tree_init(root_categories, MAX_GAMES);
+
+    // Register categories pointer for async background scraper
+    scraper_start_background(root_categories);
 
     XMBCategory current_category = CATEGORY_GAMES;
     XMBNavContext nav_ctx = { .depth = 0 };
@@ -52,7 +62,12 @@ int main(void) {
         if (state.quit) {
             running = 0;
         }
-        
+
+        // Refresh live stats (Network IP, Memory, Partition space) when viewing Info
+        if (current_category == CATEGORY_INFO) {
+            menu_tree_refresh_system_info();
+        }
+
         // Category switching only allowed at root navigation level
         if (nav_ctx.depth == 0) {
             if (state.left) {

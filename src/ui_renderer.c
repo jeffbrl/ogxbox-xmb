@@ -1,5 +1,6 @@
 #include "ui_renderer.h"
 #include "xmb_config.h"
+#include "http_client.h"
 #include <SDL.h>
 #include <SDL_ttf.h>
 #include <hal/debug.h>
@@ -88,7 +89,7 @@ static SDL_Texture* load_texture(const char* filename) {
     return NULL;
 }
 
-#define MAX_CUSTOM_ICONS 32
+#define MAX_CUSTOM_ICONS 128
 typedef struct {
     char path[256];
     SDL_Texture* texture;
@@ -98,7 +99,7 @@ static CustomIconCache icon_cache[MAX_CUSTOM_ICONS];
 static int icon_cache_count = 0;
 
 static SDL_Texture* get_custom_icon(const char* file_path) {
-    if (!file_path || file_path[0] == '\0') return NULL;
+    if (!file_path || file_path[0] == '\0' || strcmp(file_path, "NONE") == 0) return NULL;
     
     for (int i = 0; i < icon_cache_count; i++) {
         if (strcmp(icon_cache[i].path, file_path) == 0) {
@@ -112,6 +113,11 @@ static SDL_Texture* get_custom_icon(const char* file_path) {
     fseek(f, 0, SEEK_END);
     long size = ftell(f);
     fseek(f, 0, SEEK_SET);
+
+    if (size <= 0 || size > 4 * 1024 * 1024) {
+        fclose(f);
+        return NULL;
+    }
     
     unsigned char* buf = (unsigned char*)malloc(size);
     if (!buf) {
@@ -119,8 +125,13 @@ static SDL_Texture* get_custom_icon(const char* file_path) {
         return NULL;
     }
     
-    fread(buf, 1, size, f);
+    size_t read_bytes = fread(buf, 1, size, f);
     fclose(f);
+
+    if (read_bytes != (size_t)size) {
+        free(buf);
+        return NULL;
+    }
     
     int w, h, channels;
     unsigned char* data = stbi_load_from_memory(buf, (int)size, &w, &h, &channels, 4);
@@ -131,15 +142,16 @@ static SDL_Texture* get_custom_icon(const char* file_path) {
             data, w, h, 32, w * 4, SDL_PIXELFORMAT_RGBA32);
         if (surface) {
             SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer, surface);
-            SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_BLEND);
+            if (tex) {
+                SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_BLEND);
+                if (icon_cache_count < MAX_CUSTOM_ICONS) {
+                    strncpy(icon_cache[icon_cache_count].path, file_path, 256);
+                    icon_cache[icon_cache_count].texture = tex;
+                    icon_cache_count++;
+                }
+            }
             SDL_FreeSurface(surface);
             stbi_image_free(data);
-            
-            if (tex && icon_cache_count < MAX_CUSTOM_ICONS) {
-                strncpy(icon_cache[icon_cache_count].path, file_path, 256);
-                icon_cache[icon_cache_count].texture = tex;
-                icon_cache_count++;
-            }
             return tex;
         }
         stbi_image_free(data);
@@ -395,8 +407,14 @@ static void render_hud(void) {
     SDL_Color hud_color = { 230, 240, 255, 255 };
     render_text_shadow(font_small, time_str, WINDOW_WIDTH - 150, 24, hud_color, 210);
 
-    // Dashboard Branding
+    // Dashboard Branding & Live Network / Scraper Status
     render_text_shadow(font_small, "Xbox XMB", 45, 24, hud_color, 160);
+
+    const char* last_log = net_get_last_log();
+    if (last_log && last_log[0] != '\0') {
+        SDL_Color status_col = { 140, 200, 255, 255 };
+        render_text_shadow(font_small, last_log, 150, 24, status_col, 175);
+    }
 }
 
 void ui_render(XMBCategory current_category, XMBNode* items, int item_count, int selected_index, int nav_depth, const char* breadcrumb) {
@@ -532,6 +550,44 @@ void ui_render(XMBCategory current_category, XMBNode* items, int item_count, int
                 if (items[i].subtitle[0] != '\0') {
                     render_text_shadow(font_small, items[i].subtitle, origin_x + 38, (int)(y + 10), dim_text, (Uint8)(alpha * 0.85f));
                 }
+            }
+        }
+
+        // 7. Render High-Resolution Right-Hand Box Art Preview for Focused Item
+        if (selected_index >= 0 && selected_index < item_count) {
+            XMBNode* sel = &items[selected_index];
+            SDL_Texture* cover_tex = NULL;
+            if (sel->icon_path[0] != '\0') {
+                cover_tex = get_custom_icon(sel->icon_path);
+            }
+            if (!cover_tex && sel->type == NODE_TYPE_LAUNCH) {
+                cover_tex = tex_default_game;
+            }
+
+            if (cover_tex) {
+                // Box Art Card Dimensions (Aspect ~ 3:4 Xbox Case)
+                const int card_w = 120;
+                const int card_h = 168;
+                const int card_x = WINDOW_WIDTH - card_w - 55;
+                const int card_y = origin_y - (card_h / 2);
+
+                // Soft Card Drop Shadow
+                SDL_Rect shadow = { card_x + 6, card_y + 8, card_w, card_h };
+                SDL_SetRenderDrawColor(renderer, 0, 0, 0, 110);
+                SDL_RenderFillRect(renderer, &shadow);
+
+                // Card Glowing Border
+                SDL_Rect border1 = { card_x - 3, card_y - 3, card_w + 6, card_h + 6 };
+                SDL_Rect border2 = { card_x - 1, card_y - 1, card_w + 2, card_h + 2 };
+                SDL_SetRenderDrawColor(renderer, glow_blue.r, glow_blue.g, glow_blue.b, 70);
+                SDL_RenderDrawRect(renderer, &border1);
+                SDL_SetRenderDrawColor(renderer, 220, 240, 255, 140);
+                SDL_RenderDrawRect(renderer, &border2);
+
+                // Draw Box Art Texture
+                SDL_Rect card_dest = { card_x, card_y, card_w, card_h };
+                SDL_SetTextureAlphaMod(cover_tex, 255);
+                SDL_RenderCopy(renderer, cover_tex, NULL, &card_dest);
             }
         }
     } else {

@@ -15,5 +15,5 @@ fi
 
 XEMU='distrobox-host-exec flatpak run app.xemu.xemu'
 
-# 3. Launch xemu instantly
+# 3. Launch xemu
 $XEMU

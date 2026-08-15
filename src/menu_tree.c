@@ -1,6 +1,7 @@
 #include "menu_tree.h"
 #include "xbe_scanner.h"
 #include "xmb_config.h"
+#include "http_client.h"
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -93,6 +94,9 @@ void menu_tree_refresh_system_info(void) {
 
     snprintf(settings_video_children[4].title, 64, "Display Refresh");
     snprintf(settings_video_children[4].subtitle, 64, "60Hz NTSC");
+
+    // 6. Live Network Status Refresh
+    snprintf(info_root_children[2].subtitle, 64, "%s", net_get_ip_str());
 }
 
 void menu_tree_init(XMBNode* root_categories, int max_games) {
@@ -273,4 +277,33 @@ XMBNode* menu_tree_get_active_list(XMBNavContext* ctx, XMBCategory cat, XMBNode*
     XMBNode* current = ctx->stack[ctx->depth - 1];
     *out_count = current->child_count;
     return current->children;
+}
+
+void menu_tree_background_scraper_tick(XMBNode* root_categories) {
+    if (!net_is_connected()) return;
+
+    int game_count = root_categories[CATEGORY_GAMES].child_count;
+    XMBNode* games = root_categories[CATEGORY_GAMES].children;
+    if (!games || game_count <= 0) return;
+
+    // Scan for first game missing local artwork
+    for (int i = 0; i < game_count; i++) {
+        if (games[i].icon_path[0] == '\0' && games[i].path[0] != '\0') {
+            // games[i].path is e.g. "E:\Games\Halo - Combat Evolved (USA)\default.xbe"
+            char game_dir[256];
+            strncpy(game_dir, games[i].path, sizeof(game_dir));
+            char* last_slash = strrchr(game_dir, '\\');
+            if (last_slash) *last_slash = '\0'; // "E:\Games\Halo - Combat Evolved (USA)"
+
+            char* folder_name = strrchr(game_dir, '\\');
+            const char* name_to_scrape = (folder_name && *(folder_name + 1) != '\0') ? (folder_name + 1) : games[i].title;
+
+            int res = scrape_game_cover(name_to_scrape, game_dir, games[i].icon_path, sizeof(games[i].icon_path));
+            if (res != 0) {
+                // Mark as attempted so we don't retry endlessly
+                strncpy(games[i].icon_path, "NONE", sizeof(games[i].icon_path));
+            }
+            break; // Process at most one per tick
+        }
+    }
 }
