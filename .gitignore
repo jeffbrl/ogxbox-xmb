@@ -18,3 +18,8 @@ hdd_zip/
 Games/
 nxdk/
 *.d
+
+# Local project documentation & agent contexts
+GEMINI.md
+XMB_STYLING.md
+PROJECT_CONTEXT.md
