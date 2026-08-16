@@ -13,7 +13,12 @@ if [ ! -f "xbox_hdd.qcow2" ]; then
     ./scripts/build_hdd.sh
 fi
 
-XEMU='distrobox-host-exec flatpak run app.xemu.xemu'
-
 # 3. Launch xemu
-$XEMU
+XEMU_CMD="flatpak run app.xemu.xemu"
+if [ -n "$CONTAINER_ID" ] || [ -f "/run/.containerenv" ] || [ -f "/run/.toolboxenv" ] || [ -d "/run/host" ]; then
+    if command -v distrobox-host-exec >/dev/null 2>&1; then
+        XEMU_CMD="distrobox-host-exec flatpak run app.xemu.xemu"
+    fi
+fi
+
+$XEMU_CMD

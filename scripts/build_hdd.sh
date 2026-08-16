@@ -45,6 +45,15 @@ cd ..
 
 echo "==> 5. Building xbox_hdd.qcow2 disk image..."
 rm -f xbox_hdd.bin xbox_hdd.qcow2 xbox_hdd.qcow2.tmp
-distrobox-host-exec docker run --rm --user "$(id -u):$(id -g)" -v "$(pwd)":/data jeffbrl/ogxbox-image-builder python3 /app/main.py /data/xbox_hdd.qcow2 -c /data/c.zip -e /data/e.zip -t qcow2
+
+# Prefix with distrobox-host-exec if running inside a distrobox container
+DOCKER_CMD="docker"
+if [ -n "$CONTAINER_ID" ] || [ -f "/run/.containerenv" ] || [ -f "/run/.toolboxenv" ] || [ -d "/run/host" ]; then
+    if command -v distrobox-host-exec >/dev/null 2>&1; then
+        DOCKER_CMD="distrobox-host-exec docker"
+    fi
+fi
+
+$DOCKER_CMD run --rm --user "$(id -u):$(id -g)" -v "$(pwd)":/data jeffbrl/ogxbox-image-builder python3 /app/main.py /data/xbox_hdd.qcow2 -c /data/c.zip -e /data/e.zip -t qcow2
 
 echo "==> Build complete: xbox_hdd.qcow2 is ready!"
