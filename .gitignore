@@ -12,6 +12,7 @@ bin/
 # Deployment staging directories
 c_part/
 e_part/
+f_part/
 hdd_zip/
 
 # User payloads & SDK
