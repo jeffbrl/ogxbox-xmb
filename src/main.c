@@ -17,11 +17,27 @@
 int main(void) {
     XVideoSetMode(WINDOW_WIDTH, WINDOW_HEIGHT, 32, REFRESH_DEFAULT);
     
-    // Explicitly mount all standard partitions
-    nxMountDrive('C', "\\Device\\Harddisk0\\Partition2\\");
-    nxMountDrive('E', "\\Device\\Harddisk0\\Partition1\\");
-    nxMountDrive('F', "\\Device\\Harddisk0\\Partition6\\");
-    nxMountDrive('G', "\\Device\\Harddisk0\\Partition7\\");
+    // Explicitly mount all standard partitions if not already mounted
+    if (!nxIsDriveMounted('C')) {
+        if (!nxMountDrive('C', "\\Device\\Harddisk0\\Partition2\\")) {
+            nxMountDrive('C', "\\Device\\Harddisk0\\Partition2");
+        }
+    }
+    if (!nxIsDriveMounted('E')) {
+        if (!nxMountDrive('E', "\\Device\\Harddisk0\\Partition1\\")) {
+            nxMountDrive('E', "\\Device\\Harddisk0\\Partition1");
+        }
+    }
+    if (!nxIsDriveMounted('F')) {
+        if (!nxMountDrive('F', "\\Device\\Harddisk0\\Partition6\\")) {
+            nxMountDrive('F', "\\Device\\Harddisk0\\Partition6");
+        }
+    }
+    if (!nxIsDriveMounted('G')) {
+        if (!nxMountDrive('G', "\\Device\\Harddisk0\\Partition7\\")) {
+            nxMountDrive('G', "\\Device\\Harddisk0\\Partition7");
+        }
+    }
 
     // Initialize networking for on-console CDN artwork scraping
     net_init();

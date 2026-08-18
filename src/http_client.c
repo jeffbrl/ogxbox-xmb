@@ -99,6 +99,7 @@ static DWORD WINAPI scraper_worker_thread_proc(LPVOID lpParam) {
         XMBNode* games = s_scraper_categories[CATEGORY_GAMES].children;
 
         if (games && game_count > 0) {
+            snprintf(s_last_log, sizeof(s_last_log), "Found %d titles", game_count);
             for (int i = 0; i < game_count; i++) {
                 if (games[i].icon_path[0] == '\0' || strcmp(games[i].icon_path, "NONE") == 0) {
                     char game_dir[256];
@@ -406,16 +407,21 @@ int http_download_file(const char* host, const char* path, const char* out_filep
 int scrape_game_cover(const char* game_title, const char* target_folder, char* out_cover_path, size_t max_len) {
     if (!game_title || game_title[0] == '\0' || !target_folder) return -1;
 
+    // Check if cover/icon already exists locally in any standard naming format
+    const char* art_candidates[] = { "cover.png", "icon.png", "boxart.png", "poster.png", "default.png", "artwork\\icon.png" };
+    for (int a = 0; a < 6; a++) {
+        char check_path[256];
+        snprintf(check_path, sizeof(check_path), "%s\\%s", target_folder, art_candidates[a]);
+        FILE* f = fopen(check_path, "rb");
+        if (f) {
+            fclose(f);
+            strncpy(out_cover_path, check_path, max_len);
+            return 0;
+        }
+    }
+
     char local_path[256];
     snprintf(local_path, sizeof(local_path), "%s\\cover.png", target_folder);
-
-    // Check if cover already exists locally
-    FILE* f = fopen(local_path, "rb");
-    if (f) {
-        fclose(f);
-        strncpy(out_cover_path, local_path, max_len);
-        return 0;
-    }
 
     if (!net_is_connected()) {
         return -10;
